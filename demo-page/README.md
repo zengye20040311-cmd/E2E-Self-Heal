@@ -27,8 +27,10 @@ log, apply the scenario's patch, run its spec with `--reporter=line`, and save t
 
 ## Languages
 
-English is the default; Korean, Japanese and Chinese are included. The language picker in the
-header stores the choice, and `?lang=ko|ja|zh|en` links to a specific one.
+Simplified Chinese is the default across the replay, comparisons, safety metrics and architecture.
+English, Korean and Japanese remain available in the header. The language picker stores the choice,
+and `?lang=zh|en|ko|ja` links to a specific one. The versioned preference key starts earlier visitors
+in Chinese too; subsequent explicit language choices are remembered.
 
 Strings live in `src/i18n/<lang>.tsx`. `en.tsx` defines the shape (`Dict` in `types.ts`, and the
 step-note keys), so a key missing from any locale is a type error. To add a language, copy

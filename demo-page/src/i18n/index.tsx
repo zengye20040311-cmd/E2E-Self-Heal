@@ -3,19 +3,21 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { en } from "./en";
 import { ja } from "./ja";
 import { ko } from "./ko";
+import { LABELS } from "./labels";
 import type { Dict } from "./types";
 import { zh } from "./zh";
 
 export const LANGS = [
+  { code: "zh", label: "简体中文", dict: zh },
   { code: "en", label: "English", dict: en },
   { code: "ko", label: "한국어", dict: ko },
   { code: "ja", label: "日本語", dict: ja },
-  { code: "zh", label: "中文", dict: zh },
 ] as const;
 export type Lang = (typeof LANGS)[number]["code"];
 
-const DEFAULT_LANG: Lang = "en";
-const STORAGE_KEY = "e2e-healer-demo-lang";
+const DEFAULT_LANG: Lang = "zh";
+// A new preference key retires the old English default saved on earlier visits.
+const STORAGE_KEY = "e2e-healer-demo-lang-v2";
 
 function isLang(value: unknown): value is Lang {
   return LANGS.some((l) => l.code === value);
@@ -34,7 +36,7 @@ function initialLang(): Lang {
   return DEFAULT_LANG;
 }
 
-type I18n = { lang: Lang; t: Dict; setLang: (lang: Lang) => void };
+type I18n = { lang: Lang; t: Dict; labels: (typeof LABELS)[Lang]; setLang: (lang: Lang) => void };
 const I18nContext = createContext<I18n | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
@@ -42,7 +44,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const t = LANGS.find((l) => l.code === lang)!.dict;
 
   useEffect(() => {
-    document.documentElement.lang = lang;
+    document.documentElement.lang = lang === "zh" ? "zh-CN" : lang;
     document.title = t.pageTitle;
     try {
       localStorage.setItem(STORAGE_KEY, lang);
@@ -51,7 +53,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
   }, [lang, t]);
 
-  return <I18nContext.Provider value={{ lang, t, setLang }}>{children}</I18nContext.Provider>;
+  return <I18nContext.Provider value={{ lang, t, labels: LABELS[lang], setLang }}>{children}</I18nContext.Provider>;
 }
 
 export function useI18n(): I18n {

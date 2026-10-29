@@ -1,20 +1,28 @@
-# AI-Driven E2E Test Self-Healing Engine — Design
+<a id="ai-driven-e2e-test-self-healing-engine--design"></a>
 
-> Original design draft. Consumer-facing docs live in the top-level `README.md`.
+# AI 驱动的 E2E 测试自动修复引擎：设计
 
-## 1. 시스템 아키텍처 및 데이터 흐름
+> 本文为最初的设计草案。面向使用者的文档位于仓库根目录 `README.md`。
+> 本文描述早期的简化流程；当前实现还包含历史修复复用、影子回放和拒绝判断等节点，详见 [实际工作流与逐文件分析](new_info/workflow-analysis.zh-CN.md)。
 
-전체 시스템은 CLI 인터페이스(사용자 실행), AST 분석기(데이터 정제), LangGraph 에이전트(판단 및 루프), Test Runner(검증 도구)의 4가지 레이어로 구성됩니다.
+<a id="1-시스템-아키텍처-및-데이터-흐름"></a>
 
-## 2. 세부 컴포넌트 설계
+## 1. 系统架构与数据流
 
-### 2.1. 전처리 모듈 (Data Preprocessor)
+整个系统由四层组成：CLI 接口（用户启动）、AST 分析器（数据整理）、LangGraph 智能体（判断与循环）以及测试运行器（验证工具）。
 
-LLM의 컨텍스트 윈도우 최적화 및 환각 방지를 위해 입력 데이터를 추상화합니다.
+<a id="2-세부-컴포넌트-설계"></a>
 
-- Error Log Parser: Playwright의 전체 로그 중 Error: 키워드와 실패한 라인 넘버, 스택 트레이스 상단의 핵심 실패 사유(예: locator.click: Timeout 5000ms waiting for selector...)만 추출합니다.
+## 2. 组件详细设计
 
-- Diff-JSX AST Analyzer: 프론트엔드 코드의 변경 사항(git diff) 중 JSX/TSX 영역을 파싱하여, 변경 전후의 DOM 노드 트리 상태를 가벼운 JSON 객체로 변환합니다.
+<a id="21-전처리-모듈-data-preprocessor"></a>
+
+### 2.1. 数据预处理模块
+
+将输入数据抽象化，以节省大模型上下文并降低幻觉风险。
+
+- 错误日志解析器（Error Log Parser）：从完整 Playwright 日志中抽取 `Error:`、失败行号，以及堆栈顶部的核心失败原因，例如 `locator.click: Timeout 5000ms waiting for selector...`。
+- JSX 差异语法树分析器（Diff-JSX AST Analyzer）：解析前端 `git diff` 中的 JSX／TSX 区域，将变更前后的 DOM 节点转换成轻量 JSON 对象。
 
 ```json
 {
@@ -30,88 +38,89 @@ LLM의 컨텍스트 윈도우 최적화 및 환각 방지를 위해 입력 데�
 }
 ```
 
-### 2.2. LangGraph 상태 정의 (State Definition)
+<a id="22-langgraph-상태-정의-state-definition"></a>
 
-에이전트 간 공유되는 State는 불변성을 유지하며 상태 추적이 가능하도록 설계합니다. Python의 TypedDict를 활용합니다.
+### 2.2. LangGraph 状态定义
+
+智能体之间共享的状态应支持不可变更新与执行追踪，使用 Python `TypedDict` 定义。
 
 ```python
 from typing import TypedDict, List, Dict
 
 class AgentState(TypedDict):
-    test_script_path: str         # 수정 대상 테스트 파일 경로
-    original_code: str            # 최초 테스트 스크립트 코드
-    current_code: str             # 현재 루프에서 수정된 테스트 스크립트 코드
-    error_log: str                # Playwright 최신 에러 로그
-    dom_diff_context: List[Dict]  # AST 파싱을 거친 DOM 변경점 정보
-    analysis_report: str          # Diagnoser가 작성한 실패 원인 리포트
-    patch_instructions: Dict      # Patch Generator가 생성한 수정 가이드 (라인, 코드)
-    loop_count: int               # 무한 루프 방지용 카운터 (Max: 3)
-    is_success: bool              # 테스트 통과 여부
+    test_script_path: str         # 待修复测试文件的路径
+    original_code: str            # 最初的测试脚本代码
+    current_code: str             # 当前循环修改后的测试脚本代码
+    error_log: str                # 最新的 Playwright 错误日志
+    dom_diff_context: List[Dict]  # 经 AST 解析得到的 DOM 变化
+    analysis_report: str          # 诊断节点生成的失败原因报告
+    patch_instructions: Dict      # 补丁生成节点给出的行号与替换代码
+    loop_count: int               # 防止无限循环的计数器，最多 3 次
+    is_success: bool              # 测试是否通过
 ```
 
-### 2.3. 에이전트 노드 및 흐름 제어 (Nodes & Conditional Edges)
+<a id="23-에이전트-노드-및-흐름-제어-nodes--conditional-edges"></a>
 
-LangGraph는 3개의 노드와 1개의 조건부 분기(Conditional Edge)로 제어 흐름을 관리합니다.
+### 2.3. 智能体节点与条件路由
 
-#### Node 1: Diagnoser (분석 노드)
+最初的 LangGraph 设计通过三个节点和一条条件边管理控制流。
 
-- Input: error_log, dom_diff_context, current_code
+<a id="node-1-diagnoser-분석-노드"></a>
 
-- Logic: 에러 로그의 셀렉터 실패 지점과 실제 DOM 변경 정보를 매핑하여 깨진 원인을 논리적으로 추론합니다.
+#### 节点 1：问题诊断（Diagnoser）
 
-- Output: analysis_report 업데이트.
+- 输入：`error_log`、`dom_diff_context`、`current_code`。
+- 逻辑：将日志中的选择器失败位置与实际 DOM 变化对应起来，推断失败原因。
+- 输出：更新 `analysis_report`。
 
-#### Node 2: Patch Generator (수정 노드)
+<a id="node-2-patch-generator-수정-노드"></a>
 
-- Input: analysis_report, current_code
+#### 节点 2：生成补丁（Patch Generator）
 
-- Logic: Structured Outputs(NVIDIA NIM, OpenAI 호환)를 강제하여 타겟 라인과 수정할 코드를 엄격한 JSON 형태로 반환받습니다. 임의의 코드 재작성을 방지합니다.
+- 输入：`analysis_report`、`current_code`。
+- 逻辑：使用 NVIDIA NIM 等兼容 OpenAI 的结构化输出能力，要求以严格 JSON 返回目标行和替换代码，避免任意重写文件。
+- 输出：修改 `current_code` 并记录 `patch_instructions`。
 
-- Output: current_code 수정 및 patch_instructions 기록.
+<a id="node-3-test-runner-실행-노드"></a>
 
-#### Node 3: Test Runner (실행 노드)
+#### 节点 3：运行测试（Test Runner）
 
-- Input: current_code
+- 输入：`current_code`。
+- 逻辑：将候选代码写入文件系统，通过子进程执行 `npx playwright test <path>`。
+- 输出：成功时设置 `is_success = True`；失败时刷新 `error_log` 并执行 `loop_count += 1`。
 
-- Logic: 수정된 코드를 파일 시스템에 물리적으로 쓰고, subprocess를 통해 npx playwright test <path>를 실행합니다.
+<a id="conditional-edge-router-분기-로직"></a>
 
-- Output: 성공 시 is_success = True, 실패 시 error_log 갱신 및 loop_count += 1.
+#### 条件边：流程路由（Router）
 
-#### Conditional Edge: Router (분기 로직)
+- `is_success == True` 或 `loop_count >= 3` 时转到结束节点。
+- `is_success == False` 且 `loop_count < 3` 时重新进入诊断节点。
 
-- Condition: is_success == True이거나 loop_count >= 3이면 [End]로 분기합니다.
+<a id="3-핵심-한계-및-제어-대책"></a>
 
-- Condition: is_success == False이고 loop_count < 3이면 [Diagnoser]로 재진입시킵니다.
+## 3. 核心限制与控制措施
 
-## 3. 핵심 한계 및 제어 대책
+<a id="코드-왜곡-가드레일-code-integrity"></a>
 
-### 코드 왜곡 가드레일 (Code Integrity):
+### 代码完整性保护
 
-LLM이 스크립트의 전체 테스트 비즈니스 로직(Assertion 등)을 임의로 바꾸지 못하도록, Patch Generator 노드에는 오직 "실패한 Locator(셀렉터) 수정 및 대기 조건(Wait) 최적화" 임무만 프롬프트와 스키마 수준에서 명확히 제한해야 합니다.
+为防止模型任意改变测试的业务逻辑或断言，补丁生成节点必须在提示词和输出契约中明确限制：只能修复失败的定位器（选择器）及优化等待条件。
 
-### 비결정적 출력 통제:
+<a id="비결정적-출력-통제"></a>
 
-LLM의 API 응답 지연 및 예외 처리를 위해 파이썬 백엔드 단에서 try-except 블록을 설계하여, JSON 파싱 실패 시 Patch Generator로 즉시 되먹임(Feedback) 처리를 수행하는 내부 예외 루프를 병행합니다.
+### 非确定性输出控制
 
-## 4. 로드맵: 두 가지 모드 (Heal & Review)
+Python 端通过 `try-except` 处理模型 API 延迟和异常。JSON 解析失败时，将问题反馈给补丁生成节点，配合内部重试机制处理。
 
-**동기.** 테스트만 자동으로 고치는 방식은 빠르지만, 셀렉터가 깨진 근본 원인(소스 코드)을
-가리는 "꼼수"로 비칠 수 있습니다. _"1 PR review bot is worth a thousand 'self healing'
-tools"_ 라는 피드백을 반영해, 같은 진단 엔진 위에 두 번째 출력 모드를 제공합니다.
+<a id="4-로드맵-두-가지-모드-heal--review"></a>
 
-- **`heal` 모드 (기본):** 깨진 셀렉터/대기 조건을 패치하고 통과할 때까지 재실행합니다.
-  기존 `Diagnoser → Patch Generator → Selector Verifier → Test Runner` 루프.
-- **`review` 모드:** 테스트를 **수정하지 않습니다.** 대신 왜 깨졌는지 진단하고, 소스 레벨
-  수정 제안(예: 휘발성 `className` 대신 안정적인 `data-testid` 추가, `getByRole` 등
-  접근성 셀렉터 사용)을 **GitHub PR의 인라인 코멘트**로 답니다.
+## 4. 路线图：修复与审查两种模式
 
-**설계.** `review` 모드는 별도의 경량 그래프 `Diagnoser → Reviewer → END` 로 동작하며,
-패치/검증/테스트 실행/루프가 없습니다 (읽기 전용·비파괴적). Reviewer 노드는 OpenAI
-Structured Outputs로 `ReviewFinding` 목록만 반환하도록 강제되어 임의의 코드 재작성이
-불가능합니다. 각 finding은 변경된 소스 파일·라인(diff의 `@@` hunk 헤더에서 추적)에
-앵커되어 CI 래퍼가 정확한 위치에 인라인 코멘트를 게시합니다.
+**动机。** 自动改测试虽然快，但可能被视为掩盖选择器失效根因的取巧办法。社区提出“一个 PR 审查机器人胜过许多自动修复工具”的反馈，因此在同一诊断引擎上增加第二种输出模式。
 
-**경계.** CLI 코어가 진단·제안을 모두 수행하고, CI 래퍼는 코멘트 게시만 담당합니다
-(래퍼에는 어떤 수리 로직도 두지 않습니다). CLI는 `ReviewReport` JSON(및 `has_findings`)을
-기계가 읽을 수 있게 내보내고, 워크플로는 이를 분기 조건으로 사용합니다. 실행 예시는
-[`ci/github-review-bot.example.yml`](../ci/github-review-bot.example.yml) 참고.
+- **`heal` 模式（默认）：** 修复失效选择器或等待条件，重新执行测试，直到通过或耗尽预算。基础循环为 `Diagnoser → Patch Generator → Selector Verifier → Test Runner`。
+- **`review` 模式：** 不修改测试。诊断失败原因并输出源码层面的建议，例如用稳定 `data-testid` 替代易变 `className`，或使用 `getByRole` 等可访问性定位器。CI 包装层可以把建议发布成 GitHub PR 行内评论。
+
+**设计。** `review` 使用独立的轻量状态图 `Diagnoser → Reviewer → END`，图内没有补丁、验证、测试执行或循环。审查节点通过结构化输出返回 `ReviewFinding` 列表。每条建议都关联到变更源文件及行号，行号来自 diff 的 `@@` hunk 信息，供 CI 准确挂载评论。需要区分：该图不执行测试，但 CLI 在未提供 `--log` 时可以先运行测试收集失败。
+
+**边界。** CLI 核心负责诊断和生成建议，CI 包装层只负责发布评论，不包含修复逻辑。CLI 输出机器可读的 `ReviewReport` JSON 及 `has_findings` 字段，工作流据此分支。示例见 [`ci/github-review-bot.example.yml`](../ci/github-review-bot.example.yml)。

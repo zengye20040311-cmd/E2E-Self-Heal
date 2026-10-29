@@ -1,82 +1,75 @@
-# Releasing
+<a id="releasing"></a>
 
-This project ships on two channels from one tag:
+# 版本发布
 
-- **PyPI** — the `e2e-healer` CLI (`ai-driven-e2e` package), published by
-  [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) on GitHub release.
-- **GitHub Marketplace** — the composite Action ([`action.yml`](../action.yml)), listed from
-  the same release.
+本项目使用同一个标签向两个渠道发布：
 
-## One-time setup (console tasks)
+- **PyPI：** `e2e-healer` CLI，对应 `ai-driven-e2e` 包；发布 GitHub Release 时，由 [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) 上传。
+- **GitHub Marketplace：** 从同一个 Release 发布根目录的组合式 Action（[`action.yml`](../action.yml)）。
 
-These cannot be scripted — do them once in the respective web consoles.
+<a id="one-time-setup-console-tasks"></a>
 
-### 1. PyPI trusted publishing (OIDC — no API token)
+## 一次性设置：网页控制台操作
 
-`publish.yml` uses [trusted publishing](https://docs.pypi.org/trusted-publishers/), so no
-PyPI token/secret is stored. Configure it on PyPI:
+以下操作需要分别在相应网页控制台中完成一次。
 
-1. Log in to [pypi.org](https://pypi.org/) and go to **Your projects → Publishing** (or, for a
-   brand-new name, **Account → Publishing → Add a pending publisher**).
-2. Add a **GitHub** trusted publisher with:
-   - **Owner**: `Lee-Dongwook`
-   - **Repository**: `E2E-Self-Heal`
-   - **Workflow name**: `publish.yml`
-   - **Environment**: `pypi`
-3. Confirm the project name `ai-driven-e2e` is available (or already owned by you).
+<a id="1-pypi-trusted-publishing-oidc--no-api-token"></a>
 
-### 2. GitHub `pypi` environment
+### 1. PyPI 可信发布：使用 OIDC，无需 API 令牌
 
-`publish.yml` runs in `environment: pypi`. Create it under
-**Settings → Environments → New environment → `pypi`** (add reviewers/protection if desired).
+`publish.yml` 使用[可信发布](https://docs.pypi.org/trusted-publishers/)，不保存 PyPI 令牌或密钥。在 PyPI 中配置：
 
-### 2b. TestPyPI rehearsal (recommended)
+1. 登录 [pypi.org](https://pypi.org/)，进入 **Your projects → Publishing**；对于全新包名，进入 **Account → Publishing → Add a pending publisher**。
+2. 添加 **GitHub** 可信发布者，填写：
+   - **Owner（所有者）：** `Lee-Dongwook`
+   - **Repository（仓库）：** `E2E-Self-Heal`
+   - **Workflow name（工作流名称）：** `publish.yml`
+   - **Environment（环境）：** `pypi`
+3. 确认包名 `ai-driven-e2e` 可用，或已属于你的账户。
 
-[`publish-testpypi.yml`](../.github/workflows/publish-testpypi.yml) publishes to
-[TestPyPI](https://test.pypi.org/) on manual dispatch, so the real run is never the first.
-Set it up once:
+<a id="2-github-pypi-environment"></a>
 
-- Add a **trusted publisher** on [test.pypi.org](https://test.pypi.org/) for repo
-  `Lee-Dongwook/E2E-Self-Heal`, workflow `publish-testpypi.yml`, environment `testpypi`.
-- Create a GitHub environment named `testpypi`.
+### 2. GitHub 的 `pypi` 环境
 
-Then run it from **Actions → publish-testpypi → Run workflow** and verify:
+`publish.yml` 在 `environment: pypi` 下运行。前往 **Settings → Environments → New environment → `pypi`** 创建环境，并按需要配置审查人及保护规则。
+
+<a id="2b-testpypi-rehearsal-recommended"></a>
+
+### 2b. TestPyPI 发布演练（推荐）
+
+[`publish-testpypi.yml`](../.github/workflows/publish-testpypi.yml) 支持手动发布到 [TestPyPI](https://test.pypi.org/)，让正式发布之前有一次演练。首次使用时：
+
+- 在 [test.pypi.org](https://test.pypi.org/) 添加可信发布者：仓库 `Lee-Dongwook/E2E-Self-Heal`、工作流 `publish-testpypi.yml`、环境 `testpypi`。
+- 在 GitHub 创建名为 `testpypi` 的环境。
+
+然后从 **Actions → publish-testpypi → Run workflow** 运行，并验证安装：
 
 ```bash
 pip install --index-url https://test.pypi.org/simple/ \
   --extra-index-url https://pypi.org/simple/ ai-driven-e2e
 ```
 
-### 3. Marketplace (Action)
+<a id="3-marketplace-action"></a>
 
-- Repo must be **public**, `action.yml` at root with `name`/`description`/`branding` (all set).
-- The action `name` (`E2E Self-Heal`) must be unique across the Marketplace.
-- Accept the **GitHub Marketplace Developer Agreement** once.
+### 3. Marketplace 的 Action 发布
 
-## Per-release checklist
+- 仓库必须公开；根目录 `action.yml` 需要包含 `name`、`description`、`branding`，本项目已配置。
+- Action 名称 `E2E Self-Heal` 必须在 Marketplace 中唯一。
+- 首次发布前，接受 **GitHub Marketplace Developer Agreement**（开发者协议）。
 
-1. `make check && make test` green locally, and CI green on `main`.
-   Optionally rehearse first via **Actions → publish-testpypi** (see 2b above).
-   Then run the safety benchmark with `--enforce-gates` (the
-   [local command](../docs-site/docs/reference/safety-benchmark.mdx#run-it-locally) plus that
-   flag). Exit code `1` means a release gate failed: do not release. `insufficient_sample` rows do
-   not block; they mean the corpus is still too small for that rate to be enforced, and each such
-   row's **Needs** column (also `scenarios_needed` in the JSON, and the last line on stderr) says
-   how many more distinct scenarios it is missing.
-2. Bump `version` in `pyproject.toml` and the `ai-driven-e2e` version line in **both** lockfiles:
-   `uv.lock` and `product/api/uv.lock`. The product API locks the core as an editable path
-   dependency, so its lockfile records the core version too; if it is stale, the `api` job's
-   `uv sync --locked` fails. Change only that line if your local `uv` would rewrite the lockfile's
-   `revision`. Then move the `## [Unreleased]` section in
-   [`CHANGELOG.md`](../CHANGELOG.md) to the new version with today's date.
-3. Commit, then tag: `git tag -a vX.Y.Z -m "..."` and `git push origin main --follow-tags`.
-4. Update the moving major tag so Action users can pin `@vX`:
-   `git tag -f -a v0 -m "..." vX.Y.Z && git push origin v0 --force`.
-5. Draft a **GitHub Release** on tag `vX.Y.Z`; tick **Publish to Marketplace**; publish.
-   - Publishing the release triggers `publish.yml` → PyPI.
-6. Verify: `pip install ai-driven-e2e==X.Y.Z` works and the Marketplace listing is live.
+<a id="per-release-checklist"></a>
 
-## Version policy
+## 每次发布的检查清单
 
-Semantic versioning. In `0.x` (alpha), minor bumps may include breaking changes; pin exact
-versions in production. The `v0` moving tag tracks the latest `0.x` for convenience.
+1. 本地 `make check && make test` 通过，`main` 的 CI 也通过。可以先通过 **Actions → publish-testpypi** 演练。然后在[本地安全基准测试命令](../docs-site/docs/reference/safety-benchmark.mdx#run-it-locally)中增加 `--enforce-gates`。退出码 `1` 表示发布门禁失败，应停止发布。`insufficient_sample` 不阻止发布，表示该比例指标的不同场景样本数不足；报告 **Needs** 列、JSON 的 `scenarios_needed` 以及 stderr 最后一行会说明缺口。
+2. 更新 `pyproject.toml` 中的 `version`，并同步更新 **两个**锁文件 `uv.lock` 和 `product/api/uv.lock` 中 `ai-driven-e2e` 的版本。API 将核心作为可编辑路径依赖，因此也记录其版本；不一致会导致 API CI 的 `uv sync --locked` 失败。如果本地 `uv` 会额外重写锁文件的 `revision`，只修改必要的版本行。随后将 [`CHANGELOG.md`](../CHANGELOG.md) 的 `## [Unreleased]` 章节改为新版本并填写当天日期。
+3. 提交后创建并推送标签：`git tag -a vX.Y.Z -m "..."`，然后执行 `git push origin main --follow-tags`。
+4. 更新可移动主版本标签，方便 Action 用户固定到 `@vX`：`git tag -f -a v0 -m "..." vX.Y.Z && git push origin v0 --force`。
+5. 为 `vX.Y.Z` 创建 **GitHub Release**，勾选 **Publish to Marketplace** 后发布。发布 Release 会触发 `publish.yml` 上传 PyPI。
+6. 验证 `pip install ai-driven-e2e==X.Y.Z` 安装成功，且 Marketplace 页面已上线。
+
+<a id="version-policy"></a>
+
+## 版本规则
+
+采用语义化版本。`0.x` 为 alpha 阶段，次版本也可能包含不兼容变化，生产环境应固定精确版本。可移动标签 `v0` 为方便使用而跟随最新 `0.x`。

@@ -8,7 +8,7 @@ import { Prov, Section } from "./components/ui";
 import { LANGS, useI18n, type Lang } from "./i18n";
 
 export function App() {
-  const { t, lang, setLang } = useI18n();
+  const { t, lang, labels, setLang } = useI18n();
   const nav: [string, string][] = [
     ["#demo", t.nav.demo],
     ["#pairs", t.nav.pairs],
@@ -22,7 +22,7 @@ export function App() {
           <span className="font-mono font-semibold">
             e2e-<b className="font-semibold text-accent">healer</b>
           </span>
-          <nav className="flex flex-wrap gap-4 text-[0.9rem]" aria-label="Sections">
+          <nav className="flex flex-wrap gap-4 text-[0.9rem]" aria-label={labels.sections}>
             {nav.map(([href, label]) => (
               <a key={href} href={href} className="text-muted no-underline hover:text-fg">
                 {label}

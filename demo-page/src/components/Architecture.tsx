@@ -18,7 +18,7 @@ const WORKFLOW = `- name: E2E self-heal
     body-path: \${{ steps.heal.outputs.summary-path }}`;
 
 export function Architecture() {
-  const { t } = useI18n();
+  const { t, labels } = useI18n();
   return (
     <div className="grid gap-6">
       <div className="flex flex-wrap items-stretch gap-2" aria-label={t.arch.flowLabel}>
@@ -34,7 +34,7 @@ export function Architecture() {
                 kind === "router" ? "border-dashed" : ""
               }`}
             >
-              <span className="font-mono text-[0.72rem] text-accent">{kind}</span>
+              <span className="font-mono text-[0.72rem] text-accent">{labels.flowKinds[kind] ?? kind}</span>
               <b className="text-[0.95rem]">{title}</b>
               <p className="text-[0.82rem] text-muted">{desc}</p>
             </div>

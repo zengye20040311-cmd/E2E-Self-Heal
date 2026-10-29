@@ -1,137 +1,176 @@
-# RFC: Chrome Extension ↔ CLI Bridge for Pinpoint Healing
+<a id="rfc-chrome-extension--cli-bridge-for-pinpoint-healing"></a>
 
-## 1. Summary
+# RFC：用于定点修复的 Chrome 扩展与 CLI 桥接方案
 
-This RFC proposes a lightweight, secure bridge between a Chrome Extension and the `e2e-healer` CLI. The extension allows developers to visually select a broken UI element on their local screen, generate a stable selector, and invoke a scoped heal run against *only* that component via the CLI. This keeps the core engine CLI-first while providing a visual, developer-friendly entry point for targeted repairs.
+> 状态：设计提案。当前 CLI 已支持 `--selector-hint`，但本文提出的浏览器扩展、本地桥接服务和 `bridge start/stop` 命令尚不能据此视为已交付能力。性能数字是目标值，不是实测保证。
 
-## 2. Motivation
+<a id="1-summary"></a>
 
-Currently, `e2e-healer` operates at the test-file or suite level. When a developer knows *exactly* which component broke (e.g., after a localized UI refactor), they must still run the full test file or manually identify the failing selector. This creates three concrete problems:
+## 1. 概述
 
--   **Wasted tokens:** the Diagnoser re-derives context that the developer already has in front of them.
--   **Wasted time:** a full suite run (or even a full test-file run) is slow when only one interaction is actually broken.
--   **Poor feedback loop:** developers have to switch context between the browser (where the break is visible) and the terminal (where the fix happens).
+本 RFC 提议在 Chrome 扩展与 `e2e-healer` CLI 之间建立轻量、安全的桥接。开发者可以直接在本地页面上选中失效 UI 元素，生成稳定选择器，并通过 CLI 针对相应组件／测试进行有限范围的修复。核心引擎继续以 CLI 为中心，扩展只提供可视化入口。
 
-A visual picker eliminates this friction by:
+<a id="2-motivation"></a>
 
--   Letting developers point at the broken element directly in the browser
--   Generating a stable, accessibility-first selector (preferring `data-testid`, ARIA roles, or text content over fragile CSS/XPath)
--   Scoping the CLI heal to a single component/test, reducing LLM token usage and repair time
--   Keeping the core engine CLI-first and CI-compatible; the extension is purely an optional developer surface
+## 2. 动机
 
-## 3. Goals and Non-Goals
+目前 `e2e-healer` 以测试文件或测试套件为单位运行。即使开发者已明确知道某次局部 UI 重构破坏了哪个组件，仍需运行完整测试文件，或手动找到失败选择器。这带来三个问题：
 
-### 3.1 Goals
+- **浪费 token：** 诊断节点重新推导开发者已知的上下文。
+- **耗时：** 实际只坏了一次交互，却要执行整个套件或测试文件。
+- **反馈不连贯：** 开发者需要在看见问题的浏览器与执行修复的终端之间切换。
 
--   Reduce time-to-fix for single-selector breakages from minutes to seconds.
--   Reduce average token spend per heal by at least 60% relative to full-file healing.
--   Keep the CLI the single source of truth — the extension has no independent healing logic.
--   Ship a security model that is safe by default on a shared machine (loopback-only, token-gated, no persistent state).
+可视化选择器希望通过以下方式减少阻力：
 
-### 3.2 Non-Goals
+- 在浏览器中直接指向失败元素。
+- 生成稳定、优先考虑可访问性的选择器，优先使用 `data-testid`、ARIA 角色或文本，减少对脆弱 CSS／XPath 的依赖。
+- 将 CLI 修复范围缩小到单个组件／测试，降低模型调用成本和耗时。
+- 保持 CLI 核心及 CI 兼容性；扩展只是可选的开发者界面。
 
--   The extension will not run or orchestrate Playwright itself.
--   The extension will not call any LLM provider directly.
--   The bridge is not designed for remote/CI use — it is a local developer-loop tool only.
--   Multi-user or multi-machine bridging is out of scope for v1.
+<a id="3-goals-and-non-goals"></a>
 
-## 4. Architecture Overview
+## 3. 目标与不包含的范围
+
+<a id="31-goals"></a>
+
+### 3.1 目标
+
+- 将单个选择器故障的修复时间从分钟级缩短到秒级。
+- 相比完整文件修复，平均 token 消耗至少降低 60%。
+- CLI 保持唯一的修复逻辑来源，扩展不包含独立修复逻辑。
+- 在共享机器上默认安全：仅监听回环地址、令牌认证、不保存请求级持久状态。
+
+<a id="32-non-goals"></a>
+
+### 3.2 不包含的范围
+
+- 扩展不直接运行或编排 Playwright。
+- 扩展不直接调用模型服务。
+- 桥接仅用于本地开发，不面向远程或 CI。
+- 第一版不支持多用户或跨机器桥接。
+
+<a id="4-architecture-overview"></a>
+
+## 4. 架构概览
 
 ```text
-┌─────────────────────┐       ┌──────────────────┐       ┌─────────────────┐
-│  Chrome Extension   │◄─────►│  Local Bridge     │◄─────►│  e2e-healer CLI │
-│  (Visual Picker +   │ HTTP  │  (localhost:9821) │ stdin │  (Scoped Heal)  │
-│   Selector Preview) │       │  Node.js Process  │       │                 │
-└─────────────────────┘       └──────────────────┘       └─────────────────┘
-        ▲                              ▲                          ▲
-        │                              │                          │
-   User clicks element           Token-authenticated         Reads selector +
-   → generates selector          loopback-only               test path from
-   → previews stability          IPC channel                 stdin, runs heal
+Chrome 扩展                   本地桥接服务                  e2e-healer CLI
+元素选择与选择器预览  ←HTTP→  localhost:9821，Node.js  ←→   限定范围修复
+                             通过标准输入传递目标信息
+
+用户点击元素 → 生成选择器 → 预览稳定性
+                         ↓
+             令牌认证、仅回环地址的进程间通信
+                         ↓
+             CLI 读取选择器与测试路径并执行修复
 ```
 
-### 4.1 Key Principles
+<a id="41-key-principles"></a>
 
--   **CLI-first:** The extension never modifies test files directly. It only invokes the CLI.
--   **Loopback-only:** The bridge listens *only* on `127.0.0.1`. No external network access.
--   **Token-gated:** Every request requires a per-session bearer token generated by the CLI.
--   **Scoped healing:** The CLI receives a single test file + selector hint, not a full suite.
--   **Stateless bridge:** The bridge is a thin, restartable process. All durable state (summaries, patches) lives on disk via the CLI, not in the bridge process.
+### 4.1 关键原则
 
-### 4.2 Component Responsibilities
+- **CLI 优先：** 扩展只调用 CLI，不直接修改测试。
+- **仅回环地址：** 桥接只监听 `127.0.0.1`，不接受外部网络连接。
+- **令牌保护：** 每个请求携带 CLI 生成的会话级 Bearer 令牌，健康检查例外见后文。
+- **限定范围：** CLI 接收单个测试文件和选择器提示，不扫描整个套件。
+- **轻量无状态：** 桥接进程可随时重启；摘要和补丁等持久结果由 CLI 写盘，不保存在桥接进程中。
 
-| Component | Owns | Does not own |
-| :--- | :--- | :--- |
-| Chrome Extension | Element picking, selector candidate generation, UI/UX, result rendering | Test execution, patching, LLM calls |
-| Local Bridge | Auth, request validation, process spawning, response relay | Selector logic, healing logic |
-| `e2e-healer` CLI | Diagnosis, patch generation, patch application, re-run, reporting | Browser UI, element picking |
+<a id="42-component-responsibilities"></a>
 
-## 5. Methodology
+### 4.2 组件职责
 
-This section describes *how* a heal request moves from a click in the browser to a verified patch on disk, and the reasoning behind each stage.
+| 组件 | 负责 | 不负责 |
+| --- | --- | --- |
+| Chrome 扩展 | 元素选择、候选选择器、交互界面、结果展示 | 测试执行、打补丁、模型调用 |
+| 本地桥接 | 认证、请求校验、启动进程、转发结果 | 选择器生成逻辑、修复逻辑 |
+| `e2e-healer` CLI | 诊断、生成及应用补丁、重跑、报告 | 浏览器界面、元素选择 |
 
-### 5.1 Selector Candidate Generation (Extension)
+<a id="5-methodology"></a>
 
-When a developer activates the picker and clicks an element, the extension walks the DOM node and its ancestors to build a ranked list of selector candidates, evaluated in this priority order:
+## 5. 执行方法
 
-1.  `data-testid` / `data-test` / `data-cy` attributes (highest stability)
-2.  ARIA role + accessible name (`role=button[name="Submit"]`)
-3.  Visible text content (exact match, then normalized/partial match)
-4.  Structural CSS (`nth-of-type`, class list) — lowest stability, used only as a fallback
+本节描述一次浏览器点击如何变成经过验证的文件补丁，以及每个阶段的依据。
 
-Each candidate is scored on a **0.0–1.0 stability heuristic** based on:
+<a id="51-selector-candidate-generation-extension"></a>
 
--   Attribute volatility (does this attribute look auto-generated, e.g. `css-1a2b3c`?)
--   Uniqueness within the current DOM snapshot
--   Historical volatility, if the extension has seen this component before in a prior session
+### 5.1 生成候选选择器：扩展端
 
-Only the top-scoring candidate is sent to the bridge by default; the developer can override this in the picker UI before submitting.
+开发者启用选择器并点击元素后，扩展遍历当前 DOM 节点及祖先，按以下优先级生成候选：
 
-### 5.2 Request Validation (Bridge)
+1. `data-testid`／`data-test`／`data-cy` 属性，稳定性最高。
+2. ARIA 角色加可访问名称，例如 `role=button[name="Submit"]`。
+3. 可见文本：先精确匹配，再考虑规范化或部分匹配。
+4. 结构型 CSS，例如 `nth-of-type` 或类名列表，仅作最后回退。
 
-On receiving a `/heal` request, the bridge performs validation *before* spawning any CLI process:
+每个候选根据以下信息获得 **0.0～1.0 的启发式稳定性分数**：
 
-1.  Verify the bearer token against the current session token (constant-time comparison).
-2.  Verify `Host` header is `127.0.0.1` or `localhost`.
-3.  Verify `test_path` resolves to a real file inside the workspace root and does not match any `DENY_GLOBS` entry.
-4.  Verify `selector_hint.type` is one of the accepted enum values.
-5.  Reject with the appropriate 4xx code on first failure (see §7.2) rather than accumulating errors.
+- 属性是否易变，例如是否像自动生成的 `css-1a2b3c`。
+- 在当前 DOM 快照中是否唯一。
+- 若扩展在之前会话见过该组件，可参考历史变更频率。
 
-Only after all five checks pass does the bridge spawn the CLI subprocess.
+默认只向桥接发送最高分候选；开发者可在提交前从界面覆盖选择。
 
-### 5.3 Scoped Heal Execution (CLI)
+<a id="52-request-validation-bridge"></a>
 
-The CLI treats a hinted heal as a distinct execution mode from a normal suite run:
+### 5.2 请求校验：桥接端
 
-1.  **Failure Scanner is skipped.** The CLI trusts the extension's identification of the broken test/selector instead of re-discovering it.
-2.  **Selector hint injection.** The hint is inserted into `dom_diff_context` as a synthetic, highest-priority diff entry, so the Diagnoser's first pass already has the answer to "what changed" and only needs to determine "what's the correct replacement."
-3.  **Bounded iteration.** `max_loops` defaults to 1 for hinted heals (vs. the suite default of 3–5), since the diagnostic search space is already narrowed to a single element.
-4.  **Isolated re-run.** After patch application, only the specified test file is re-run — not the full suite — to verify the fix before reporting success.
+收到 `/heal` 后，必须先完成以下检查，再启动 CLI：
 
-### 5.4 Verification and Reporting
+1. 用恒定时间比较校验当前会话 Bearer 令牌。
+2. 检查 `Host` 为 `127.0.0.1` 或 `localhost`。
+3. 检查 `test_path` 解析后是工作区内的真实文件，且不匹配 `DENY_GLOBS`。
+4. 检查 `selector_hint.type` 属于允许枚举。
+5. 首次发现错误立即返回相应 4xx，错误类别见第 6.2 节。
 
-A heal is only reported as `"healed"` if the isolated re-run passes. If it fails, the CLI falls back to a second (final) loop with the failure output appended to `dom_diff_context`, then reports `"failed"` with the last known diff if that also fails — it does not silently retry indefinitely or escalate to a full-suite scan without explicit developer action.
+全部通过后才能创建 CLI 子进程。
 
-### 5.5 Why This Reduces Cost
+<a id="53-scoped-heal-execution-cli"></a>
 
-Full-file healing pays for: failure scanning, full `dom_diff_context` construction, multi-candidate selector search, and multi-loop iteration. Hinted healing skips the first two entirely and narrows the third to a single candidate, which is what produces the ~70% token reduction and ~60% time reduction cited in §8.
+### 5.3 限定范围修复：CLI 端
 
-## 6. Messaging Protocol
+提案将带提示的修复设计为区别于普通套件运行的模式：
 
-### 6.1 Transport
+1. **跳过失败文件扫描。** 已给出目标测试和选择器，不必重新发现目标。
+2. **注入选择器提示。** 在 `dom_diff_context` 中增加最高优先级的合成条目，让诊断节点直接利用已知目标。
+3. **限制迭代。** 提案希望提示型修复默认只用 1 次循环，并在必要时增加最后一次尝试；原草案将套件默认描述为 3～5 次。当前实现的 `max_loops` 实际限制为 1～3，且传入 hint 不会自动改为单次。
+4. **单独重跑。** 应用补丁后只重跑指定测试文件，不执行整套测试，先验证局部修复。
 
--   **Protocol:** HTTP/1.1 over TCP
--   **Binding:** `127.0.0.1:9821` (loopback only; configurable via `E2E_HEALER_BRIDGE_PORT`)
--   **Auth:** Bearer token in `Authorization` header. Token is generated by `e2e-healer bridge start` and printed to stdout + written to `~/.e2e-healer/bridge-token`.
--   **Content-Type:** `application/json`
+<a id="54-verification-and-reporting"></a>
 
-### 6.2 Endpoints
+### 5.4 验证与报告
+
+只有单独重跑通过，才报告 `"healed"`。按提案设计，首次失败后把新的失败证据补充到上下文，执行第二次也是最后一次尝试；仍失败则返回 `"failed"` 和最后已知差异。不得无限重试，也不得在没有明确开发者操作时擅自扩大为全套扫描。
+
+<a id="55-why-this-reduces-cost"></a>
+
+### 5.5 降低成本的原因
+
+完整文件修复需要失败扫描、完整 DOM 变化上下文构造、多候选搜索和多轮迭代。提案希望提示型修复减少前两项开销，将第三项缩到单个候选，从而达到第 8 节约 70% token 和约 60% 时间节省目标。这些属于待基准验证的预期，不代表当前 `--selector-hint` 已跳过所有 diff 处理。
+
+<a id="6-messaging-protocol"></a>
+
+## 6. 通信协议
+
+<a id="61-transport"></a>
+
+### 6.1 传输
+
+- **协议：** TCP 上的 HTTP/1.1。
+- **监听：** `127.0.0.1:9821`，仅回环，可通过拟议配置 `E2E_HEALER_BRIDGE_PORT` 修改。
+- **认证：** `Authorization` 中的 Bearer 令牌。拟由 `e2e-healer bridge start` 生成，显示到 stdout 并写入 `~/.e2e-healer/bridge-token`。
+- **内容类型：** `application/json`。
+
+<a id="62-endpoints"></a>
+
+### 6.2 接口
+
+<a id="post-heal"></a>
 
 #### `POST /heal`
 
-Invoke a scoped heal for a single component.
+为单个组件启动限定范围修复。
 
-**Request Body:**
+**请求体：**
 
 ```json
 {
@@ -147,18 +186,18 @@ Invoke a scoped heal for a single component.
 }
 ```
 
-| Field                       | Type    | Required | Description                                                        |
-| :-------------------------- | :------ | :------- | :------------------------------------------------------------------ |
-| `test_path`                 | string  | ✅       | Relative path to the test file containing the broken selector       |
-| `selector_hint`             | object  | ✅       | Stable selector generated by the extension                          |
-| `selector_hint.type`        | string  | ✅       | One of: `role`, `testid`, `text`, `css`                             |
-| `selector_hint.value`       | string  | ✅       | The generated stable selector value                                 |
-| `selector_hint.original`    | string  | ✅       | The original broken selector (for diff context)                     |
-| `selector_hint.confidence`  | float   | ❌       | 0.0–1.0 stability score from the extension's selector generator     |
-| `app_url`                   | string  | ❌       | Override for `E2E_HEALER_APP_URL`                                   |
-| `dry_run`                   | boolean | ❌       | If true, preview changes without writing                            |
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `test_path` | string | ✅ | 包含失败选择器的测试文件相对路径 |
+| `selector_hint` | object | ✅ | 扩展生成的稳定选择器 |
+| `selector_hint.type` | string | ✅ | `role`、`testid`、`text`、`css` 之一 |
+| `selector_hint.value` | string | ✅ | 新生成的选择器值 |
+| `selector_hint.original` | string | ✅ | 原失效选择器，用于差异上下文 |
+| `selector_hint.confidence` | float | ❌ | 生成器给出的 0.0～1.0 稳定性分数 |
+| `app_url` | string | ❌ | 覆盖 `E2E_HEALER_APP_URL` |
+| `dry_run` | boolean | ❌ | 预览结果，不保留最终文件修改；当前 CLI 可能临时写入候选并验证 |
 
-**Response (200 OK):**
+**成功响应：200 OK。**
 
 ```json
 {
@@ -170,7 +209,7 @@ Invoke a scoped heal for a single component.
 }
 ```
 
-**Response (200 OK, failed heal):**
+**修复失败响应：200 OK。**
 
 ```json
 {
@@ -182,27 +221,33 @@ Invoke a scoped heal for a single component.
 }
 ```
 
-**Error Responses:**
+**错误响应：**
 
-| Code | Meaning                             |
-| :--- | :----------------------------------- |
-| 401  | Invalid or expired bearer token      |
-| 400  | Malformed request / missing fields   |
-| 404  | Test file not found                  |
-| 422  | Selector hint invalid / unresolvable |
-| 500  | Internal CLI error                   |
+| 状态码 | 含义 |
+| --- | --- |
+| 401 | Bearer 令牌无效或过期 |
+| 400 | 请求格式错误或缺少字段 |
+| 404 | 找不到测试文件 |
+| 422 | 选择器提示无效、无法解析，或路径不符合策略 |
+| 500 | CLI 内部错误 |
+
+<a id="get-health"></a>
 
 #### `GET /health`
 
-Liveness check. Returns `200 {"status": "ok"}` if the bridge is running and authenticated. Unauthenticated callers receive `200 {"status": "ok"}` with no further detail — liveness alone does not require a token, but every other endpoint does.
+检查服务存活。桥接运行时返回 `200 {"status": "ok"}`。未认证调用者也能获得同样的最少信息；存活检查不要求令牌，其他接口均要求。
+
+<a id="post-stop"></a>
 
 #### `POST /stop`
 
-Gracefully shut down the bridge server. Requires a valid bearer token. Any in-flight `/heal` request is allowed to finish before shutdown; new requests are rejected with `503` once shutdown has been requested.
+优雅关闭桥接服务，需要有效 Bearer 令牌。已开始的 `/heal` 请求可以完成；开始关闭后，新请求返回 `503`。
 
-### 6.3 CLI Invocation
+<a id="63-cli-invocation"></a>
 
-The extension does **not** call the CLI directly. Instead, it sends a request to the bridge, which then spawns:
+### 6.3 CLI 调用
+
+扩展不直接调用 CLI，而是请求桥接，再由桥接启动：
 
 ```bash
 e2e-healer heal <test_path> \
@@ -212,85 +257,108 @@ e2e-healer heal <test_path> \
   --json
 ```
 
-The `--selector-hint` flag (implemented in Issue #119) accepts the JSON selector hint and injects it into the `dom_diff_context` as high-priority diagnostic context, bypassing the need for the Diagnoser to rediscover the broken selector.
+`--selector-hint` 已在 Issue #119 实现，接收 JSON 选择器提示并将其注入 `dom_diff_context` 作为高优先级诊断上下文，减少重新推导目标的工作。
 
-## 7. Security Model
+<a id="7-security-model"></a>
 
-### 7.1 Loopback Binding
+## 7. 安全模型
 
-The bridge binds **exclusively** to `127.0.0.1`. It rejects any request where the `Host` header is not `127.0.0.1` or `localhost`. This prevents DNS rebinding attacks.
+<a id="71-loopback-binding"></a>
 
-### 7.2 Per-Session Bearer Token
+### 7.1 仅监听回环地址
 
--   Generated as a 32-byte cryptographically random hex string when `e2e-healer bridge start` runs.
--   Stored in `~/.e2e-healer/bridge-token` with `0600` permissions.
--   Rotated on every bridge restart.
--   Never logged or included in responses.
--   Compared using a constant-time comparison to avoid timing side-channels.
+服务只绑定 `127.0.0.1`，拒绝 `Host` 不是 `127.0.0.1` 或 `localhost` 的请求。提案将其作为 DNS 重绑定防护的一部分。
 
-### 7.3 Path Validation
+<a id="72-per-session-bearer-token"></a>
 
-All `test_path` values are validated against the sandbox's `WRITE_GLOBS` and `DENY_GLOBS` before being passed to the CLI. Paths outside the workspace root, or paths resolving through symlinks outside the workspace root, are rejected with `422`.
+### 7.2 每次会话独立的 Bearer 令牌
 
-### 7.4 No Persistent State
+- 拟在执行 `e2e-healer bridge start` 时生成 32 字节密码学随机令牌，采用十六进制表示。
+- 写入 `~/.e2e-healer/bridge-token`，权限设为 `0600`。
+- 每次重启桥接都轮换。
+- 不写入运行日志，不放入接口响应。
+- 用恒定时间比较减少计时侧信道。
 
-The bridge holds no state between requests. Each `/heal` call is independent. No selectors, logs, or tokens are cached in memory beyond the current session.
+启动时如何向开发者提供令牌见第 6.1 节；这里的“不写日志”指运行日志，不包含该拟议的一次性显示。
 
-### 7.5 Threat Model Summary
+<a id="73-path-validation"></a>
 
-| Threat | Mitigation |
-| :--- | :--- |
-| Malicious website reads/writes local files via the bridge | Loopback-only binding + Host header check + bearer token |
-| Token leakage via logs | Token is never written to logs or included in any response body |
-| Path traversal outside workspace | `WRITE_GLOBS`/`DENY_GLOBS` validation, symlink resolution before check |
-| Another local process guesses the token | 32-byte random token, `0600` file permissions, rotated per session |
-| Stale token reuse after bridge restart | Token rotates on every `bridge start`; old token is invalidated immediately |
+### 7.3 路径校验
 
-## 8. Performance Expectations
+传给 CLI 前，用沙箱 `WRITE_GLOBS` 和 `DENY_GLOBS` 校验所有 `test_path`。路径在工作区外，或经过符号链接解析后逃逸时，返回 `422`。
 
-Scoping a heal via selector hint is expected to reduce token consumption by roughly 70% and repair time by roughly 60% compared to full-file healing, primarily by skipping the Failure Scanner and capping iteration at a single loop (see §5.5). These figures should be treated as a target for the initial benchmark suite (§10.2) rather than a guarantee — actual savings will vary with component complexity and DOM size.
+<a id="74-no-persistent-state"></a>
 
-## 9. Extension Responsibilities
+### 7.4 不保存请求级持久状态
 
-The Chrome Extension is responsible for:
+每次 `/heal` 独立。桥接不持久保存请求中的选择器和日志；认证令牌只在当前会话中有效，按上述规则管理。
 
--   Visual element selection overlay
--   Generating stable selectors using Playwright's recommended hierarchy: `data-testid` > ARIA role > visible text > CSS
--   Previewing selector stability score before sending
--   Displaying heal results inline (success/failure/diff)
--   Managing bridge connection status and token refresh
+<a id="75-threat-model-summary"></a>
 
-The extension is **not** responsible for:
+### 7.5 威胁模型摘要
 
--   Modifying test files
--   Running Playwright
--   Invoking the LLM
--   Storing API keys
+| 威胁 | 缓解措施 |
+| --- | --- |
+| 恶意网站通过桥接读写本地文件 | 回环绑定、Host 检查和 Bearer 令牌 |
+| 日志泄露令牌 | 不记录令牌，不放入响应体 |
+| 路径穿越工作区 | 写入／禁止 glob 检查，检查前解析符号链接 |
+| 本地其他进程猜测令牌 | 32 字节随机值、`0600` 权限、每会话轮换 |
+| 重启后重用旧令牌 | 每次 bridge start 轮换，立即使旧令牌失效 |
 
-## 10. Rollout Plan
+<a id="8-performance-expectations"></a>
 
-### 10.1 Phasing
+## 8. 性能预期
 
-1.  **Phase 1 — Bridge + CLI flag:** ship `e2e-healer bridge start/stop` and the `--selector-hint` flag behind a feature flag, tested via curl/Postman before any extension exists.
-2.  **Phase 2 — Extension MVP:** picker overlay, single-candidate selector generation, `/heal` call, inline result display.
-3.  **Phase 3 — Hardening:** confidence scoring, multi-candidate fallback in the UI, `/stop` lifecycle polish, error-state UX.
-4.  **Phase 4 — GA:** remove feature flag, document in main README, publish to Chrome Web Store.
+预计选择器提示可比完整文件修复节省约 70% token 和约 60% 修复时间，主要来自减少扫描和迭代。第 10.2 节需要用基准验证这些目标；实际收益取决于组件复杂度和 DOM 大小。
 
-### 10.2 Validation
+<a id="9-extension-responsibilities"></a>
 
--   Benchmark hinted vs. full-file healing across a fixed set of representative broken-selector fixtures to confirm the token/time savings in §8.
--   Manual security review of §7 threat model before Phase 2 ships to any external testers.
+## 9. 扩展职责
 
-## 11. Open Questions
+Chrome 扩展负责：
 
-1.  Should the bridge support WebSocket for streaming heal progress back to the extension?
-2.  Should the extension be able to trigger `review` mode in addition to `heal`?
-3.  How should the extension handle multi-root workspaces (monorepos)?
-4.  Should the bridge auto-start when the extension detects a Playwright project, or require explicit `e2e-healer bridge start`?
+- 可视化元素选择覆盖层。
+- 按本提案优先级生成稳定选择器：`data-testid` → ARIA 角色 → 可见文本 → CSS。
+- 发送前显示稳定性分数。
+- 就地展示成功、失败和代码差异。
+- 管理桥接连接状态及令牌更新。
 
-## 12. Future Work
+扩展不负责修改测试文件、运行 Playwright、调用模型或保存 API 密钥。
 
--   VS Code extension variant using the same bridge protocol
--   Selector history tracking across heal runs
--   Integration with PR review bot to suggest selectors before tests break
--   Shadow Testing integration for pre-emptive selector validation
+<a id="10-rollout-plan"></a>
+
+## 10. 交付计划
+
+<a id="101-phasing"></a>
+
+### 10.1 分阶段交付
+
+1. **阶段 1：桥接与 CLI 参数。** 在功能开关后交付 `bridge start/stop` 与提示参数；扩展开发前先用 curl／Postman 验证。
+2. **阶段 2：最小可用扩展。** 元素覆盖层、单候选生成、`/heal` 调用和结果展示。
+3. **阶段 3：加固。** 置信度评分、界面多候选回退、`/stop` 生命周期及错误状态体验。
+4. **阶段 4：正式发布。** 移除功能开关，更新根 README，发布 Chrome Web Store。
+
+<a id="102-validation"></a>
+
+### 10.2 验证
+
+- 用固定的代表性失败 fixture 比较提示型与完整文件修复，验证第 8 节 token／时间目标。
+- 阶段 2 对外测试前，人工审查第 7 节威胁模型。
+
+<a id="11-open-questions"></a>
+
+## 11. 待讨论问题
+
+1. 是否通过 WebSocket 向扩展流式回传进度？
+2. 扩展是否还应支持 `review` 模式？
+3. 如何处理 monorepo 等多根工作区？
+4. 发现 Playwright 项目时自动启动桥接，还是要求显式运行 `e2e-healer bridge start`？
+
+<a id="12-future-work"></a>
+
+## 12. 后续工作
+
+- 使用同一桥接协议开发 VS Code 扩展。
+- 跟踪多次修复之间的选择器历史。
+- 接入 PR 审查机器人，在测试失败前提供定位器建议。
+- 接入影子测试，提前验证候选选择器。

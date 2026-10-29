@@ -58,7 +58,7 @@ const STATUS_CLASS: Record<GateStatus, string> = {
 const KEY_METRICS: MetricKey[] = ["falseGreen", "refusalAccuracy"];
 
 export function Bench() {
-  const { t } = useI18n();
+  const { t, labels } = useI18n();
   const m = computeMetrics(benchRows);
   // A single false green fails its gate at any sample size.
   const falseGreenStatus: GateStatus = m.falseGreen.value ? "fail" : gate(m.falseGreen, (v) => v === 0);
@@ -111,7 +111,7 @@ export function Bench() {
             const ok = xs.filter((r) => r.actual === r.expected).length;
             return (
               <tr key={c}>
-                <Td mono>{c}</Td>
+                <Td>{labels.classes[c] ?? c}</Td>
                 <Td>{xs.length}</Td>
                 <Td>{xs[0] ? (xs[0].expected === "repair" ? t.bench.repair : t.bench.refuse) : "—"}</Td>
                 <Td>{xs.filter((r) => r.actual === "repair").length}</Td>
@@ -126,11 +126,11 @@ export function Bench() {
         <Table head={t.bench.gateHead}>
           {gates.map(([name, threshold, value, n, status]) => (
             <tr key={name}>
-              <Td mono>{name}</Td>
+              <Td>{labels.gates[name] ?? name}</Td>
               <Td>{threshold}</Td>
               <Td mono>{value}</Td>
               <Td>{n}</Td>
-              <Td className={STATUS_CLASS[status]}>{status}</Td>
+              <Td className={STATUS_CLASS[status]}>{labels.statuses[status]}</Td>
             </tr>
           ))}
         </Table>

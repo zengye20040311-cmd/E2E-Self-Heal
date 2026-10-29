@@ -1,33 +1,28 @@
-# Shadow Testing — Quickstart
+<a id="shadow-testing--quickstart"></a>
 
-> **Status:** the replay pipeline (trace parsing, snapshot storage, mock injection,
-> runtime) is implemented today. The `e2e-healer --shadow` CLI surface — picking record
-> vs. replay mode and selecting a snapshot — is still pending
-> ([#81](https://github.com/Lee-Dongwook/E2E-Self-Heal/issues/81)). This quickstart is
-> drafted against that design: Steps 1–2 work as written today; Step 3 shows the
-> provisional CLI shape and will be updated once #81 lands. For the full pipeline
-> architecture, see [`docs/shadow-testing.md`](shadow-testing.md).
+# 影子测试：快速入门
 
-Shadow Testing replays a Playwright test against a **recorded snapshot** of the app's
-network traffic instead of a live backend — fast, deterministic, no side effects.
+> **状态：** 轨迹解析、快照存储、模拟注入及回放运行时已有实现。`e2e-healer --shadow` 下的录制／回放选择和快照选择参数仍未完整开放，原计划见 [#81](https://github.com/Lee-Dongwook/E2E-Self-Heal/issues/81)。第 1～2 步可按示例执行；第 3 步区分当前占位命令与拟议参数。完整架构见 [`docs/shadow-testing.md`](shadow-testing.md)。
 
-## 1. Capture a trace
+影子测试使用应用网络交互的**录制快照**重放 Playwright 测试，以减少对真实后端的依赖，目标是让验证更快、更稳定。
 
-A shadow snapshot starts from an ordinary Playwright trace. Run the test you want to
-capture with tracing on:
+<a id="1-capture-a-trace"></a>
+
+## 1. 录制轨迹
+
+先用普通 Playwright 追踪功能录制目标测试：
 
 ```sh
 npx playwright test tests/login.spec.ts --trace on
 ```
 
-Playwright writes the trace to `test-results/<test-name>/trace.zip`. Nothing
-shadow-specific has happened yet — this is a normal recorded run.
+Playwright 将轨迹写入 `test-results/<test-name>/trace.zip`。这一步只是正常测试录制，尚未启用影子回放。
 
-## 2. Parse the trace and store the snapshot
+<a id="2-parse-the-trace-and-store-the-snapshot"></a>
 
-Feed the trace through [`PlaywrightTraceParser`](../app/shadow/trace_parser.py) and
-persist it with [`SnapshotStore`](../app/shadow/snapshot_store.py). This works today
-against `main`:
+## 2. 解析轨迹并保存快照
+
+使用 [`PlaywrightTraceParser`](../app/shadow/trace_parser.py) 解析，然后通过 [`SnapshotStore`](../app/shadow/snapshot_store.py) 持久化：
 
 ```sh
 uv run python - <<'PY'
@@ -50,36 +45,29 @@ print(f"saved {len(network_snapshots)} network interactions as '{snapshot_id}'")
 PY
 ```
 
-The snapshot lands as JSON under `.shadow_workspace/snapshots/<sha256 of the snapshot id>.json`
-(the workspace root and subdirectory names come from
-[`ShadowConfig`](../app/shadow/config.py)). Deterministic, diff-friendly serialization
-means re-running this against the same trace always produces the same file.
+JSON 快照写入 `.shadow_workspace/snapshots/<快照 ID 的 SHA-256>.json`，目录设置来自 [`ShadowConfig`](../app/shadow/config.py)。序列化结果稳定且易于比较；对相同轨迹重复生成时内容应一致。
 
-On first use, `ShadowWorkspace` claims a new or empty root with a versioned ownership
-marker. It refuses filesystem, home, and repository roots, as well as non-empty
-directories without that marker. This prevents a mistaken `workspace_dir` from adopting
-an unrelated directory. A workspace created by an older version without the marker must
-be moved aside or emptied before it can be claimed.
+首次使用时，`ShadowWorkspace` 通过带版本的所有权标记认领新目录或空目录。它拒绝文件系统根目录、用户主目录、仓库根目录，以及没有标记的非空目录，防止误将无关目录设为工作区。旧版创建但没有标记的工作区需要先移开或清空，再重新认领。
 
-Snapshots are durable: `ON_SUCCESS` and `ALWAYS` cleanup remove only the workspace's
-`cache/` and `tmp/` directories. The owned root and `snapshots/` remain available for
-later replays. `NEVER` preserves all three artifact directories.
+快照会持久保留：`ON_SUCCESS` 与 `ALWAYS` 清理只删除 `cache/` 和 `tmp/`，保留工作区根目录及 `snapshots/`；`NEVER` 保留全部三类目录。
 
-### Offline replay policy
+<a id="offline-replay-policy"></a>
 
-Set `offline=True` to make replay a hard no-network boundary. Offline runs require
-`miss_policy="strict"`: an unmatched request is aborted and is never continued to the
-live origin or fetched for recording. `lenient` and `record-and-augment` are rejected
-when combined with offline mode; use them only when deliberately allowing live traffic.
+### 离线回放策略
 
-## 3. Replay the test with `e2e-healer --shadow`
+将 `offline=True` 与 `miss_policy="strict"` 配合使用。未匹配请求会被中止，不放行到真实服务，也不为补录而访问网络。离线模式不允许搭配 `lenient` 或 `record-and-augment`；后两者只应在明确允许真实流量时使用。这里限制的是受回放拦截的请求，不应理解为对任意测试代码的操作系统级隔离。
 
-Today, `e2e-healer --shadow` on its own only exercises the runtime lifecycle as a
-placeholder — confirm your install is wired up correctly:
+<a id="3-replay-the-test-with-e2e-healer---shadow"></a>
+
+## 3. 使用 `e2e-healer --shadow` 回放测试
+
+当前单独运行 `--shadow` 只检查最小运行时的初始化与关闭：
 
 ```sh
 uv run e2e-healer --shadow
 ```
+
+实际输出仍保留程序原文：
 
 ```text
 ╭──────────────── Shadow Testing ────────────────╮
@@ -88,33 +76,30 @@ uv run e2e-healer --shadow
 ╰──────────────────────────────────────────────────╯
 ```
 
-Once the CLI surface from #81 lands, the same flag will drive a full replay by pointing
-at the test file and the snapshot captured in Step 2 — the underlying
-[`run_shadow(test_path, snapshot_id)`](../app/shadow/runtime.py) entry point that
-implements this already accepts both:
+含义是“影子测试入口仍在开发，目前未执行回放逻辑”。底层 [`run_shadow(test_path, snapshot_id)`](../app/shadow/runtime.py) 已接收测试路径和快照 ID；以下是 #81 的**拟议 CLI 形式，当前不能作为可用命令复制运行**：
 
 ```sh
-# Provisional — exact flag names finalize with #81
+# 拟议形式，实际参数名须等待 #81 确定
 uv run e2e-healer --shadow tests/login.spec.ts --snapshot-id login-happy-path
 ```
 
-That launches a headless Chromium instance, replays every request in the snapshot
-through the [`MockInjector`](../app/shadow/injector.py), and runs the test against it —
-no live backend involved.
+完整底层回放会启动无头 Chromium，通过 [`MockInjector`](../app/shadow/injector.py) 匹配快照响应，再运行测试。正常修复图中的 `shadow_verifier` 已可调用这条底层路径；它按测试文件名的 stem 查找已有快照，未找到则跳过。上面手动保存的 `login-happy-path` 是独立示例 ID，不会自动与名为 login.spec.ts 的测试关联。
 
-## 4. Read the result
+<a id="4-read-the-result"></a>
 
-A replay run produces a [`ShadowRunResult`](../app/shadow/schemas.py):
+## 4. 读取结果
 
-| Field             | Meaning                                                     |
-| ------------------ | ------------------------------------------------------------ |
-| `is_success`       | whether the Playwright test process exited `0`               |
-| `matched_count`    | requests fulfilled from the snapshot                          |
-| `missed_count`     | requests with no matching snapshot entry (aborted, logged as `network_mock_no_match`) |
-| `score`            | average match confidence across matched requests, `0.0`–`1.0` |
-| `missed_requests`  | the actual unmatched `CapturedRequest`s, for debugging        |
+回放返回 [`ShadowRunResult`](../app/shadow/schemas.py)：
 
-The CLI renders this as a panel, e.g.:
+| 字段 | 含义 |
+| --- | --- |
+| `is_success` | Playwright 测试进程是否以 `0` 退出 |
+| `matched_count` | 用快照响应成功满足的请求数 |
+| `missed_count` | 无匹配快照的请求数，严格模式会中止并记录 `network_mock_no_match` |
+| `score` | 已匹配请求的平均相似度分数；当前评分器使用加权分值，不保证在 0～1 之间 |
+| `missed_requests` | 实际未匹配的 `CapturedRequest` 列表，供排查 |
+
+原设计中的面板示例如下，数字仅为展示：
 
 ```text
 ╭──────────────── Shadow Testing ────────────────╮
@@ -122,14 +107,11 @@ The CLI renders this as a panel, e.g.:
 ╰──────────────────────────────────────────────────╯
 ```
 
-A `missed_count` above zero usually means the trace didn't cover a request the test
-makes on this run (a new endpoint, a changed query string outside the matcher's
-method+path fallback) — re-capture the trace, or check `missed_requests` to see exactly
-which calls fell through.
+`missed_count` 大于零，通常说明本次测试访问了录制未覆盖的请求，例如新接口、变化过大的参数，或重复响应队列已耗尽。可以重新录制，或检查 `missed_requests` 中具体漏配的调用。
 
-## See also
+<a id="see-also"></a>
 
-- [`docs/shadow-testing.md`](shadow-testing.md) — full pipeline architecture, stage-by-stage
-  contracts, and extension points.
-- [`docs/roadmap-v0.5.md`](roadmap-v0.5.md) — current implementation status of each
-  Shadow Testing component.
+## 延伸阅读
+
+- [`docs/shadow-testing.md`](shadow-testing.md)：完整架构、各阶段契约和扩展点。
+- [`docs/roadmap-v0.5.md`](roadmap-v0.5.md)：影子测试历史规划及组件状态。

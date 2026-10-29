@@ -46,7 +46,7 @@
   --color-healed: var(--healed);
   --color-warn: var(--warn);
   --color-code: var(--code);
-  --font-sans: "IBM Plex Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --font-sans: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "IBM Plex Sans KR", sans-serif;
   --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
   --animate-rise: rise 260ms ease both;
 }

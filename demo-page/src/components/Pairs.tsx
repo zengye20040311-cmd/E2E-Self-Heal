@@ -7,7 +7,7 @@ function Verdict({ repair, children }: { repair: boolean; children: string }) {
 }
 
 export function Pairs() {
-  const { t } = useI18n();
+  const { t, labels } = useI18n();
   const { sameError, sameDiff } = t.pairs;
   const d = scenarioData;
   return (
@@ -15,7 +15,7 @@ export function Pairs() {
       <div className="grid gap-3">
         <p className="font-semibold">
           {sameError.question} <span className="font-normal text-muted">· {sameError.source}</span>{" "}
-          <span className="font-mono text-[0.75rem] text-accent">identical</span>
+          <span className="font-mono text-[0.75rem] text-accent">{labels.identical}</span>
         </p>
         <div className="grid gap-3 min-[761px]:grid-cols-2">
           <Pane title="delayed-cta" badge={<Verdict repair>{sameError.repair}</Verdict>}>

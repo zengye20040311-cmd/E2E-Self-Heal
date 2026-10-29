@@ -1,6 +1,6 @@
-# VHS tape for the README demo GIF. Render with:  vhs docs/demo.tape
-# Output: docs/demo.gif. Uses shadow functions from docs/demo.sh so it renders
-# deterministically without a key, a server, or network access.
+# README 演示动图的 VHS 录制脚本。生成命令：vhs docs/demo.tape
+# 输出 docs/demo.gif。使用 docs/demo.sh 的同名模拟函数，
+# 无需密钥、服务或网络即可生成固定演示内容。
 
 Output docs/demo.gif
 
@@ -12,7 +12,7 @@ Set Padding 26
 Set Theme "Dracula"
 Set TypingSpeed 55ms
 
-# Load the deterministic demo functions, then clear the setup noise.
+# 加载固定演示函数，然后清屏隐藏准备过程。
 Hide
 Type "source docs/demo.sh"
 Enter

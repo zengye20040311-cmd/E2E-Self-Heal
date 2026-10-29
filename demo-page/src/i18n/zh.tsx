@@ -2,12 +2,12 @@ import { Code, Em } from "../components/ui";
 import type { Dict } from "./types";
 
 export const zh: Dict = {
-  pageTitle: "E2E Self-Heal 演示",
+  pageTitle: "E2E Self-Heal 中文演示",
   language: "语言",
   nav: { demo: "演示", pairs: "相同症状，相反答案", bench: "安全指标", arch: "架构" },
   prov: { real: "实测", sim: "示例" },
   hero: {
-    eyebrow: "AI-driven Playwright self-healing",
+    eyebrow: "AI 驱动的 Playwright 测试自动修复",
     title: (
       <>
         修好<Em tone="healed">坏掉的选择器</Em>，绝不掩盖<Em tone="broken">坏掉的产品</Em>。
@@ -21,8 +21,8 @@ export const zh: Dict = {
     facts: [
       ["12", "带标签的场景 · 6 个类别"],
       ["≤ 3", "修复循环上限"],
-      ["选择器 · 等待", "补丁允许修改的范围 (AST lock)"],
-      ["exit 0 / 1", "CI 据此分支的退出码"],
+      ["选择器 · 等待", "补丁允许修改的范围（语法树锁定）"],
+      ["退出码 0 / 1", "持续集成据此判断执行结果"],
     ],
   },
   demo: {
@@ -37,10 +37,10 @@ export const zh: Dict = {
     stages: {
       fail: "Playwright 失败",
       prep: "预处理",
-      diag: "Diagnoser",
-      patch: "Patch Generator",
-      verify: "Verifier · AST lock",
-      run: "Test Runner",
+      diag: "问题诊断",
+      patch: "生成补丁",
+      verify: "选择器验证 · 语法树锁定",
+      run: "运行测试",
       end: "结果",
     },
     expected: { repair: "应修复", refuse: "应拒绝" },
@@ -107,18 +107,18 @@ export const zh: Dict = {
       </>
     ),
     tiles: {
-      falseGreen: { label: "False-green rate", desc: "放过坏掉产品的比例。目标 0%" },
-      refusalAccuracy: { label: "Refusal accuracy", desc: "正确拒绝 ÷ (正确拒绝 + 错误修复 + 错误拒绝)" },
-      correctRefusal: { label: "Correct-refusal rate", desc: "应拒绝时拒绝的比例" },
-      incorrectRefusal: { label: "Incorrect-refusal rate", desc: "拒绝了可修复问题的比例 (成本)" },
-      precision: { label: "Repair precision", desc: "修复中本应修复的比例" },
+      falseGreen: { label: "错误放行率", desc: "放过坏掉产品的比例。目标 0%" },
+      refusalAccuracy: { label: "拒绝准确率", desc: "正确拒绝 ÷ (正确拒绝 + 错误修复 + 错误拒绝)" },
+      correctRefusal: { label: "正确拒绝率", desc: "应拒绝时拒绝的比例" },
+      incorrectRefusal: { label: "错误拒绝率", desc: "拒绝了可修复问题的比例（成本）" },
+      precision: { label: "修复精确率", desc: "修复中本应修复的比例" },
     },
     classHead: ["类别", "场景", "预期", "修复", "拒绝", "正确"],
-    gateHead: ["发布门禁", "标准", "值", "n", "状态"],
+    gateHead: ["发布门禁", "标准", "值", "样本数", "状态"],
     repair: "修复",
     refuse: "拒绝",
     caption: (min, regressions) =>
-      `门禁只阻止发布，不阻止合并。样本少于 ${min} 个的指标只显示为 insufficient_sample，不会执行。但 false green 只要出现 1 次，无论样本数多少都判定失败。当前语料库中 product_regression 只有 ${regressions} 个，还不足以宣称"false-green 0%"。`,
+      `门禁只阻止发布，不阻止合并。样本少于 ${min} 个的指标只显示为“样本不足”，不会执行。但错误放行只要出现 1 次，无论样本数多少都判定失败。当前语料库中的产品功能回归场景只有 ${regressions} 个，还不足以宣称“错误放行率为 0%”。`,
   },
   arch: {
     title: "架构",
@@ -126,34 +126,34 @@ export const zh: Dict = {
     flowLabel: "修复循环",
     flow: [
       ["input", "失败日志 + git diff", "Playwright 原始日志与 UI 变更"],
-      ["preprocess", "Error Log Parser · Diff AST Analyzer", "只保留核心错误行和 DOM 变更 JSON"],
-      ["node", "Diagnoser", "将失败的选择器映射到 DOM 变更"],
-      ["node", "Patch Generator", "通过 Structured Outputs 只返回行号和替换代码"],
-      ["gate", "Selector Verifier · AST lock", "在真实 DOM 中恰好匹配 1 个；选择器和 timeout 以外的修改一律拒绝"],
-      ["node", "Test Runner", "重新运行 npx playwright test"],
-      ["router", "通过或循环 3 次 → 结束", "否则返回 Diagnoser"],
+      ["preprocess", "错误日志解析 · 语法树差异分析", "只保留核心错误行和 DOM 变更 JSON"],
+      ["node", "问题诊断", "将失败的选择器映射到 DOM 变更"],
+      ["node", "生成补丁", "通过结构化输出只返回行号和替换代码"],
+      ["gate", "选择器验证 · 语法树锁定", "在真实 DOM 中恰好匹配 1 个；选择器和超时设置以外的修改一律拒绝"],
+      ["node", "运行测试", "重新运行 npx playwright test"],
+      ["router", "通过或循环 3 次 → 结束", "否则返回问题诊断节点"],
     ],
-    loopNote: "LangGraph StateGraph · 只由 Router 决定终止 · loop_count 永远不超过 3",
+    loopNote: "LangGraph 状态图 · 只由流程路由决定终止 · 修复循环次数永远不超过 3",
     guardrailsTitle: "护栏",
     guardrails: [
       ["代码完整性", "只修改选择器和等待条件。断言和测试流程在提示词和 JSON 模式两个层面都被锁定。"],
       [
-        "AST lock",
+        "语法树锁定",
         <>
           将补丁后的整个文件按语法树比较。定位器字符串、timeout 和 wait 名称以外的任何修改都会以 <Code>guardrail_violation</Code> 拒绝，解析失败同样拒绝。
         </>,
       ],
-      ["Selector Verifier", "如果选择器在真实页面上匹配 0 个 (凭空捏造) 或 2 个以上 (含糊不清)，会在运行测试前回滚。"],
-      ["LLM 输出失败处理", "JSON 解析失败不会让图崩溃，而是反馈给 Patch Generator。"],
+      ["选择器验证", "如果选择器在真实页面上匹配 0 个（凭空捏造）或 2 个及以上（含糊不清），会在运行测试前回滚。"],
+      ["大模型输出失败处理", "JSON 解析失败不会让流程崩溃，而是反馈给补丁生成节点。"],
     ],
-    ciTitle: "CLI 核心 + CI 包装层",
+    ciTitle: "命令行核心 + 持续集成包装层",
     exits: [
-      ["exit 0", "测试已修复 → CI 创建补丁 PR"],
-      ["exit ≠ 0", "仍然失败或被拒绝 → 写出 RefusalReport JSON"],
+      ["退出码 0", "测试已修复 → 持续集成创建补丁合并请求"],
+      ["退出码 ≠ 0", "仍然失败或被拒绝 → 写出拒绝报告 JSON"],
       [
-        "outcome",
+        "执行结果",
         <>
-          <Code>passed</Code> · <Code>healed</Code> · <Code>unhealed</Code> · <Code>reviewed</Code> · <Code>errored</Code>
+          通过 · 已修复 · 未修复 · 已审查 · 执行错误
         </>,
       ],
     ],
@@ -210,7 +210,7 @@ export const zh: Dict = {
     assertionSideFailure: "选择器现在是对的。失败出在断言一侧，选择器修改无法解决。",
     noAssertionEdit: "它不会为了让测试通过而修改断言。",
     foundButDisabled: "找到了元素，但它处于禁用状态。",
-    fedBackSpendsLoop: "违规信息会反馈给 Patch Generator，并消耗一次循环。",
+    fedBackSpendsLoop: "违规信息会反馈给补丁生成节点，并消耗一次循环。",
     noForceClick: "它不会用强制点击绕过禁用的按钮。",
     navigationFailedFirst: "在任何选择器运行之前导航就失败了。没有可依据的 DOM 变更。",
     fixTheEnvironment: "没有修改测试的依据。需要修复的是环境。",
@@ -225,7 +225,7 @@ export const zh: Dict = {
       title: "按钮文案变更",
       summary: "Get started 变成了 Start now，role 和处理函数不变。",
       why: "这是只改了文案的漂移，本应修复，但引擎没有拿到新名称的证据。",
-      gap: "Diff AST Analyzer 只提取属性变更，会漏掉文本节点的变更 (实际输出：dom_changes=0)，所以 LLM 看不到新的文案。这是安全但有成本的失败。",
+      gap: "语法树差异分析器只提取属性变更，会漏掉文本节点的变更（实际输出：dom_changes=0），所以大模型看不到新的文案。这是安全但有成本的失败。",
     },
     "delayed-cta": {
       title: "延迟渲染的按钮",

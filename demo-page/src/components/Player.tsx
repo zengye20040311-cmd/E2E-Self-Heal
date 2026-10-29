@@ -32,7 +32,7 @@ const ENTRY_BORDER: Partial<Record<StepKind, string>> = {
 };
 
 export function Player() {
-  const { t } = useI18n();
+  const { t, labels } = useI18n();
   const [idx, setIdx] = useState(0);
   const [step, setStep] = useState(-1);
   const [auto, setAuto] = useState(false);
@@ -112,7 +112,7 @@ export function Player() {
           >
             <span className="text-[0.95rem] font-semibold">{t.scenarios[s.name].title}</span>
             <span className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-[0.72rem] text-muted">{s.class}</span>
+              <span className="font-mono text-[0.72rem] text-muted">{labels.classes[s.class] ?? s.class}</span>
               <ExpectedChip outcome={s.expected} />
             </span>
           </button>
@@ -213,7 +213,7 @@ export function Player() {
             {auto ? t.demo.controls.pause : t.demo.controls.auto}
           </Btn>
           <span className="ml-auto text-[0.78rem] text-muted">
-            <Kbd>←</Kbd> <Kbd>→</Kbd> {t.demo.controls.step} · <Kbd>Space</Kbd> {t.demo.controls.auto}
+            <Kbd>←</Kbd> <Kbd>→</Kbd> {t.demo.controls.step} · <Kbd>{labels.space}</Kbd> {t.demo.controls.auto}
           </span>
         </div>
       </div>
@@ -222,14 +222,14 @@ export function Player() {
 }
 
 function Result({ scenario: s }: { scenario: PlayerScenario }) {
-  const { t } = useI18n();
+  const { t, labels } = useI18n();
   const text = t.scenarios[s.name];
   if (s.outcome === "repair") {
     return (
       <div className="grid gap-2 rounded-lg border border-healed bg-healed/12 p-4">
         <div className="flex flex-wrap items-center gap-2 text-[1.05rem] font-bold text-healed">
-          {t.demo.healedTitle} <Tag>exit 0</Tag>
-          <Tag>healed</Tag>
+          {t.demo.healedTitle} <Tag>{labels.exitCode(0)}</Tag>
+          <Tag>{labels.healed}</Tag>
         </div>
         <p className="text-[0.92rem]">{text.why}</p>
         <p className="text-[0.85rem] text-muted">{t.demo.healedNote}</p>
@@ -240,8 +240,8 @@ function Result({ scenario: s }: { scenario: PlayerScenario }) {
   return (
     <div className="grid gap-2 rounded-lg border border-warn bg-warn/12 p-4">
       <div className="flex flex-wrap items-center gap-2 text-[1.05rem] font-bold text-warn">
-        {t.demo.refusedTitle} · {verdict} <Tag>exit 1</Tag>
-        {s.reason && <Tag>{s.reason}</Tag>}
+        {t.demo.refusedTitle} · {verdict} <Tag>{labels.exitCode(1)}</Tag>
+        {s.reason && <Tag>{t.demo.reasons[s.reason]}</Tag>}
       </div>
       <p className="text-[0.92rem]">
         {s.reason && `${t.demo.reasons[s.reason]}: `}

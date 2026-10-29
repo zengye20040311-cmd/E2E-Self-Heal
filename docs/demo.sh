@@ -1,12 +1,12 @@
-# Sourced by docs/demo.tape to render docs/demo.gif deterministically (no network/secrets).
-# Defines shadow functions that reproduce the VERIFIED healer run shown in the README "Demo"
-# section, so the GIF renders identically anywhere. Re-render with: vhs docs/demo.tape
+# 由 docs/demo.tape 加载，以固定输出生成 docs/demo.gif；不访问网络或密钥。
+# 定义同名模拟函数，重现 README 演示中已验证的修复输出。
+# 保持各环境中的动图内容一致。重新生成命令：vhs docs/demo.tape
 
 PS1='$ '
 
-_c() { printf '%b\n' "$1"; }  # print, interpreting \033 color escapes
+_c() { printf '%b\n' "$1"; }  # 输出文本并解释 \033 颜色转义
 
-# Stand in for `npx playwright test` — the failing run (broken selector).
+# 模拟 npx playwright test 的选择器失效输出。
 npx() {
   _c ''
   _c '  \033[31m✘\033[0m  example.spec.ts:7 › submits the form'
@@ -15,7 +15,7 @@ npx() {
   _c ''
 }
 
-# Stand in for the `e2e-healer` CLI — diagnose → patch → verify → re-run.
+# 模拟 e2e-healer CLI：诊断→生成补丁→验证→重跑。
 e2e-healer() {
   sleep 0.4; _c '  \033[36mdiagnoser\033[0m         #submit-btn → id renamed (from git diff)'
   sleep 0.5; _c '  \033[36mpatch_generator\033[0m   instruction_count=1'
