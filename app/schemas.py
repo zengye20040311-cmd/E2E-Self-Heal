@@ -19,8 +19,8 @@ SCHEMA_VERSION: Literal["2.3"] = "2.3"
 # verifier could judge (``budget_exhausted``).
 Termination = Literal["verified", "refused", "budget_exhausted", "verification_failed"]
 
-# Candidate rejections that come from running a verifier on the patched test, as opposed to the
-# line gates, the AST lock or an application error that stop a candidate before verification.
+# Candidate rejections from verification. Historical replay values remain readable for old
+# JSON reports; the current repair graph only verifies selectors and runs real tests.
 VERIFIER_REJECTIONS = frozenset(
     {"shadow_failed", "shadow_error", "selector_not_unique", "test_failed", "final_suite_failed"}
 )
@@ -155,7 +155,10 @@ class CandidateEvidence(BaseModel):
     source: Literal["memory", "llm"]
     instructions: list[PatchInstruction] = Field(default_factory=list)
     memory_score: float | None = Field(default=None, ge=0.0, le=1.0)
-    shadow_score: float | None = None
+    shadow_score: float | None = Field(
+        default=None,
+        description="Legacy report field; network replay was removed and new runs leave it null",
+    )
     selector_counts: dict[str, int] = Field(default_factory=dict)
     test_passed: bool | None = None
     outcome: Literal["generated", "accepted", "rejected"] = "generated"
@@ -193,7 +196,7 @@ class LoopEvidence(BaseModel):
     stage: Literal[
         "memory_lookup",
         "patch_generator",
-        "shadow_verifier",
+        "shadow_verifier",  # Accept historical reports; never emitted by the current graph.
         "selector_verifier",
         "test_runner",
         "refusal_finalizer",

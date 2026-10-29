@@ -73,8 +73,6 @@ from app.schemas import (
     SelectorHint,
     SuiteSummary,
 )
-from app.shadow.runtime import run_shadow
-from app.shadow.schemas import ShadowRunResult
 from app.state import AgentState
 from app.utils.files import atomic_write
 
@@ -100,28 +98,8 @@ logger = structlog.get_logger(__name__)
 
 
 @app.callback(invoke_without_command=True)
-def main(
-    shadow: bool = typer.Option(
-        False, "--shadow", help="run the Shadow Testing runtime (under development)"
-    ),
-) -> None:
+def main() -> None:
     """AI-driven E2E test self-healing engine."""
-    if not shadow:
-        return
-    configure_logging(settings.log_level)
-    logger.info("shadow_mode_invoked")
-
-    result = run_shadow()
-    if isinstance(result, ShadowRunResult):
-        status = "passed" if result.is_success else "failed"
-        renderable = (
-            f"[bold]{status}[/bold] | matched={result.matched_count} "
-            f"missed={result.missed_count} score={result.score:.2f}"
-        )
-    else:
-        renderable = result
-    console.print(Panel(renderable, title="Shadow Testing", border_style="yellow"))
-    raise typer.Exit(code=0)
 
 
 def _chdir_root(root: Path | None) -> None:

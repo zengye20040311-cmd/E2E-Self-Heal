@@ -6,7 +6,7 @@ from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LLMProvider = Literal["nvidia", "openai", "anthropic", "ollama", "deepseek", "orcarouter"]
-# Mirrors app.shadow.redaction.MIN_CONFIGURED_SECRET_LENGTH; duplicated here so configuration
+# Mirrors app.redaction.MIN_CONFIGURED_SECRET_LENGTH; duplicated here so configuration
 # validation does not have to import the redaction module (which imports these settings).
 MIN_SENSITIVE_VALUE_LENGTH = 4
 

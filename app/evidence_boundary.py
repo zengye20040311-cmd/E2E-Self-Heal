@@ -16,7 +16,7 @@ from typing import cast
 
 from app.preprocess.aria_snapshot import abstract_snapshot
 from app.preprocess.jsx_chunker import extract_error_line
-from app.shadow.redaction import RedactionRecord, redact_text, redact_value
+from app.redaction import RedactionRecord, redact_text, redact_value
 from app.state import AgentState
 
 

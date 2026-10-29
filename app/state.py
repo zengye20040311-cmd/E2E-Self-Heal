@@ -62,7 +62,6 @@ class EvidenceCandidateRecord(TypedDict):
     memory_score: float | None
     outcome: Literal["generated", "accepted", "rejected"]
     rejection: str | None
-    shadow_score: NotRequired[float]
     selector_counts: NotRequired[dict[str, int]]
     test_passed: NotRequired[bool]
     ast_lock: NotRequired[EvidenceAstLockRecord]
@@ -93,7 +92,6 @@ class EvidenceLoopRecord(TypedDict):
     stage: Literal[
         "memory_lookup",
         "patch_generator",
-        "shadow_verifier",
         "selector_verifier",
         "test_runner",
         "refusal_finalizer",
@@ -130,7 +128,6 @@ class AgentState(TypedDict):
     boundary_report: NotRequired[dict]  # Architecture-boundary validation result
     patch_application_report: NotRequired[PatchApplicationReport]
     patch_provider_report: NotRequired[PatchProviderReport]
-    shadow_report: NotRequired[dict]  # Shadow Verifier's network replay result
     memory_report: NotRequired[MemoryReport]
     review_report: NotRequired[dict]  # Reviewer's source-level suggestions (review mode only)
     refusal_reason: NotRequired[RefusalReason]  # exact reason for a terminal repair refusal

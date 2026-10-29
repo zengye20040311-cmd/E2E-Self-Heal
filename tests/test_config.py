@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.config import MIN_SENSITIVE_VALUE_LENGTH, Settings
-from app.shadow.redaction import MIN_CONFIGURED_SECRET_LENGTH
+from app.redaction import MIN_CONFIGURED_SECRET_LENGTH
 
 
 def make_settings(**overrides: Any) -> Settings:

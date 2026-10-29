@@ -32,7 +32,7 @@ Playwright 广泛用于前端与质量保障团队。E2E-Self-Heal 虽然以 Pyt
 
 ### 1. 自动修复循环
 
-标准 `e2e-healer` 模式检测失败、生成补丁、验证选择器并重跑测试。下图展示简化主干；实际代码还包含历史复用、影子验证和拒绝判断，详见 [逐文件工作流分析](new_info/workflow-analysis.zh-CN.md)。
+标准 `e2e-healer` 模式检测失败、生成补丁、验证选择器并重跑测试。下图展示简化主干；实际代码还包含历史复用和拒绝判断，详见 [逐文件工作流分析](workflow-analysis.zh-CN.md)。
 
 ```mermaid
 graph TD
@@ -89,28 +89,9 @@ graph TD
 
 <a id="3-shadow-testing--matching-engine"></a>
 
-### 3. 影子测试与匹配引擎
+### 3. 真实测试验证与证据记录
 
-用于需要模拟后端网络依赖的测试场景。
-
-- **请求规范化器 `RequestNormalizer`：** 清理 UUID、ISO／Epoch 时间戳等动态值，以及 `Authorization`、`Cookie`、`X-CSRF-Token` 等认证相关字段，生成稳定的请求签名。
-- **匹配评分器 `MatchScorer`：** 使用可配置权重计算请求相似度：
-
-  ```python
-  @dataclass
-  class ScoringWeights:
-      exact_url_bonus: float = 150.0
-      base_url_match: float = 100.0
-      query_max: float = 30.0
-      headers_max: float = 20.0
-      body_max: float = 50.0
-  ```
-
-- **确定性选择：** 多个候选响应符合条件时，依次按以下规则选择：
-  1. 分数从高到低。
-  2. URL 完全相同优先。
-  3. 路径完全相同优先。
-  4. 使用稳定的原始索引排序；重复请求再按记录序列消耗响应。
+补丁通过 AST 检查后，先验证定位器唯一性，再运行真实 Playwright 测试。候选、检查结果、执行路径和拒绝原因写入报告。影子测试与网络快照回放已从本地 main 移除，旧实现保存在 backup/before-shadow-removal。
 
 ---
 

@@ -9,12 +9,10 @@
 >
 > **Current release: `0.4.0`** (multi-provider LLM: OpenAI / Anthropic / Ollama / NVIDIA NIM).
 >
-> **Already shipped through `0.4.0`:** the core repair loop (Diagnoser → Patch Generator →
-> Shadow-verify → Selector Verifier → Test Runner), multi-provider LLM, and the **Shadow
-> Testing** subsystem (parser/store/injector/matcher wired into the heal graph via
-> `shadow_verifier`). The table below covers only what's still ahead. Remaining Shadow
-> extension points live under the [`shadow-extensions`](https://github.com/Lee-Dongwook/E2E-Self-Heal/milestones)
-> milestone, not a version bucket.
+> **Local main simplification:** network snapshot replay and `--shadow` were removed.
+> The core repair flow is Diagnoser → Patch Generator → Selector Verifier → Test Runner.
+> The full pre-removal implementation is retained on the local branch
+> `backup/before-shadow-removal`; upstream roadmap items below are historical context.
 >
 > The initiatives below are organized into four strategic axes. Each item carries a
 > **suggested target version** — see [Release Plan](#release-plan) for the reasoning and

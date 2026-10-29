@@ -10,7 +10,6 @@ from app.graph import (
     route_after_decline,
     route_after_memory,
     route_after_patch,
-    route_after_shadow,
     route_after_verify,
 )
 from app.schemas import DiagnosisVerdict, RefusalReason
@@ -32,10 +31,9 @@ def test_route_selects_terminal_or_retry_path(overrides: dict, expected: str) ->
 
 
 def test_memory_hit_starts_verification_and_rejection_retries_diagnosis() -> None:
-    memory_state = make_state(memory_report={"active": True}, shadow_report={"ok": False})
+    memory_state = make_state(memory_report={"active": True})
 
-    assert route_after_memory(memory_state) == "shadow_verifier"
-    assert route_after_shadow(memory_state) == "diagnoser"
+    assert route_after_memory(memory_state) == "selector_verifier"
     assert (
         route_after_verify(
             make_state(memory_report={"active": True}, verification_report={"ok": False})
@@ -45,18 +43,12 @@ def test_memory_hit_starts_verification_and_rejection_retries_diagnosis() -> Non
 
 
 def test_capped_memory_verification_failures_finalize_immediately() -> None:
-    shadow_state = make_state(
-        loop_count=settings.max_loops,
-        memory_report={"active": True},
-        shadow_report={"ok": False},
-    )
     selector_state = make_state(
         loop_count=settings.max_loops,
         memory_report={"active": True},
         verification_report={"ok": False},
     )
 
-    assert route_after_shadow(shadow_state) == "refusal_finalizer"
     assert route_after_verify(selector_state) == "refusal_finalizer"
 
 
@@ -113,7 +105,7 @@ def test_route_after_patch_adjudicates_a_candidate_that_proposed_nothing() -> No
     )
 
     assert route_after_patch(declined) == "decline_adjudicator"
-    assert route_after_patch(proposed) == "shadow_verifier"
+    assert route_after_patch(proposed) == "selector_verifier"
 
 
 def test_a_provider_failure_is_not_a_declined_candidate() -> None:
@@ -122,16 +114,16 @@ def test_a_provider_failure_is_not_a_declined_candidate() -> None:
     failed = make_state(patch_provider_report={"ok": False}, patch_instructions={})
 
     assert declined_candidate(failed) is False
-    assert route_after_patch(failed) == "shadow_verifier"
+    assert route_after_patch(failed) == "selector_verifier"
 
 
 @pytest.mark.parametrize(
     ("verdict", "expected"),
     [
         (DiagnosisVerdict.BEHAVIOUR_CHANGE, "refusal_finalizer"),
-        (None, "shadow_verifier"),
-        (DiagnosisVerdict.UNCLEAR, "shadow_verifier"),
-        (DiagnosisVerdict.SELECTOR_DRIFT, "shadow_verifier"),
+        (None, "selector_verifier"),
+        (DiagnosisVerdict.UNCLEAR, "selector_verifier"),
+        (DiagnosisVerdict.SELECTOR_DRIFT, "selector_verifier"),
     ],
     ids=["behaviour-change", "provider-failure", "unclear", "selector-drift"],
 )

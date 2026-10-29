@@ -72,7 +72,7 @@ def test_evidence_bundle_redacts_sensitive_values_and_references_snapshot(
     assert bundle.aria_snapshot is not None
     assert bundle.aria_snapshot.source_path == "test-results/login/error-context.md"
     # URL redaction keeps the marker percent-encoded, so a URL reads the same in a prompt, a
-    # log line, and a persisted Shadow snapshot.
+    # log line, and another structured evidence value.
     assert (
         bundle.aria_snapshot.sha256
         == hashlib.sha256(b"page: https://example.test/?token=%5BREDACTED%5D").hexdigest()

@@ -66,6 +66,7 @@ def test_atomic_write_fsyncs_file_before_replace(
     assert target.read_text() == "durable"
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Directory fsync is only supported on POSIX")
 def test_atomic_write_fsyncs_parent_dir_after_replace(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

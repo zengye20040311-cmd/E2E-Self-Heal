@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Removed
+- Network snapshot replay, the `--shadow` CLI option, and the `shadow_verifier` repair gate.
+  Candidates now proceed directly to live selector verification and real Playwright execution.
+  Replay-specific modules, tests, examples and the Python Playwright dependency were removed.
+  Shared evidence/log redaction moved to `app/redaction.py`. Legacy JSON replay fields remain
+  readable for compatibility; no current run performs replay.
+
 ## [0.6.0] - 2026-10-25
 
 The first release whose safety gates are enforced on a corpus large enough to mean something:

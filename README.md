@@ -77,8 +77,9 @@ Four layers drive a LangGraph repair loop:
 > `E2E_HEALER_APP_URL` is empty or the page is unreachable (e.g. Node/Playwright not
 > installed) — tooling problems never block a heal.
 
-See [`docs/design.md`](docs/design.md) for the full design, and
-[`docs/shadow-testing.md`](docs/shadow-testing.md) for the planned Shadow Testing pipeline.
+See [`docs/design.md`](docs/design.md) for the core design. Network snapshot replay and
+the `--shadow` CLI option have been removed from this branch; candidate patches are
+checked against the live DOM and verified by rerunning the real Playwright test.
 
 ## Usage (CI / GitHub Action)
 

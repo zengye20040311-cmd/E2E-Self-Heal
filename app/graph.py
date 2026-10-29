@@ -14,7 +14,6 @@ from app.nodes.memory_lookup import memory_lookup
 from app.nodes.patch_generator import patch_generator
 from app.nodes.reviewer import reviewer
 from app.nodes.selector_verifier import selector_verifier
-from app.nodes.shadow_verifier import shadow_verifier
 from app.nodes.test_runner import test_runner
 from app.schemas import DiagnosisVerdict, RefusalReason
 from app.state import AgentState, EvidenceCandidateRecord, GraphStepRecord
@@ -54,20 +53,8 @@ def route_at_start(state: AgentState) -> str:
 def route_after_memory(state: AgentState) -> str:
     """Skip LLM work only when a guarded history candidate was applied."""
     if state.get("memory_report", {}).get("active", False):
-        return "shadow_verifier"
-    return "diagnoser"
-
-
-def route_after_shadow(state: AgentState) -> str:
-    """After shadow replay: proceed to live selector verifier on a pass/skip, else re-patch (or end at cap)."""
-    report = state.get("shadow_report", {})
-    if report.get("ok", True):
         return "selector_verifier"
-    if state["loop_count"] >= settings.max_loops:
-        return _REFUSAL_FINALIZER
-    if state.get("memory_report", {}).get("active", False):
-        return "diagnoser"
-    return "patch_generator"
+    return "diagnoser"
 
 
 def refusal_finalizer(state: AgentState) -> dict:
@@ -143,14 +130,14 @@ def route_after_patch(state: AgentState) -> str:
         return "patch_generator"
     if declined_candidate(state):
         return _DECLINE_ADJUDICATOR
-    return "shadow_verifier"
+    return "selector_verifier"
 
 
 def route_after_decline(state: AgentState) -> str:
     """Refuse a judged behaviour change; otherwise verify the unchanged candidate as before."""
     if state.get("diagnosis_verdict") is DiagnosisVerdict.BEHAVIOUR_CHANGE:
         return _REFUSAL_FINALIZER
-    return "shadow_verifier"
+    return "selector_verifier"
 
 
 def route_after_verify(state: AgentState) -> str:
@@ -215,14 +202,13 @@ def _recorded(name: str, node: Node) -> Node:
 
 
 def build_graph() -> CompiledStateGraph:
-    """Build and compile the Diagnoser → Patch Generator → Shadow Verifier → Selector Verifier → Test Runner loop."""
+    """Build the guarded repair loop with live selector verification and real test execution."""
     graph = StateGraph(AgentState)
     nodes: dict[str, Node] = {
         "memory_lookup": memory_lookup,
         "diagnoser": diagnoser,
         "patch_generator": patch_generator,
         _DECLINE_ADJUDICATOR: decline_adjudicator,
-        "shadow_verifier": shadow_verifier,
         "selector_verifier": selector_verifier,
         "test_runner": test_runner,
         _REFUSAL_FINALIZER: refusal_finalizer,
@@ -238,14 +224,14 @@ def build_graph() -> CompiledStateGraph:
     graph.add_conditional_edges(
         "memory_lookup",
         route_after_memory,
-        {"shadow_verifier": "shadow_verifier", "diagnoser": "diagnoser"},
+        {"selector_verifier": "selector_verifier", "diagnoser": "diagnoser"},
     )
     graph.add_edge("diagnoser", "patch_generator")
     graph.add_conditional_edges(
         "patch_generator",
         route_after_patch,
         {
-            "shadow_verifier": "shadow_verifier",
+            "selector_verifier": "selector_verifier",
             "patch_generator": "patch_generator",
             _DECLINE_ADJUDICATOR: _DECLINE_ADJUDICATOR,
             _REFUSAL_FINALIZER: _REFUSAL_FINALIZER,
@@ -254,17 +240,7 @@ def build_graph() -> CompiledStateGraph:
     graph.add_conditional_edges(
         _DECLINE_ADJUDICATOR,
         route_after_decline,
-        {"shadow_verifier": "shadow_verifier", _REFUSAL_FINALIZER: _REFUSAL_FINALIZER},
-    )
-    graph.add_conditional_edges(
-        "shadow_verifier",
-        route_after_shadow,
-        {
-            "selector_verifier": "selector_verifier",
-            "patch_generator": "patch_generator",
-            "diagnoser": "diagnoser",
-            _REFUSAL_FINALIZER: _REFUSAL_FINALIZER,
-        },
+        {"selector_verifier": "selector_verifier", _REFUSAL_FINALIZER: _REFUSAL_FINALIZER},
     )
     graph.add_conditional_edges(
         "selector_verifier",

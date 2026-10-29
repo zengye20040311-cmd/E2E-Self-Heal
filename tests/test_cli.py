@@ -20,8 +20,8 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 def _strip_ansi(text: str) -> str:
     """Drop ANSI color codes so substring checks survive rich's styled help output.
-    Under color (CI forces it), rich splits an option like --shadow into separately
-    styled spans (- + -shadow), so a raw substring match fails. Stripping the
+    Under color (CI forces it), rich splits an option like --help into separately
+    styled spans (- + -help), so a raw substring match fails. Stripping the
     escape codes first makes the assertion terminal-independent.
     """
     return _ANSI_RE.sub("", text)
@@ -718,19 +718,6 @@ def test_cli_sandbox_violation_exits_2(monkeypatch, tmp_path) -> None:
     assert "sandbox denied:" in result.stderr
 
 
-def test_cli_shadow_flag_runs_successfully() -> None:
-    result = CliRunner().invoke(app, ["--shadow"])
-
-    assert result.exit_code == 0
-
-
-def test_cli_help_documents_shadow_flag() -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["--help"])
-    assert result.exit_code == 0
-    assert "--shadow" in _strip_ansi(result.stdout)
-
-
 def test_cli_suite_passes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cli_module, "run_playwright", lambda _: (True, ""))
 
@@ -880,3 +867,12 @@ def test_cli_heal_notifies_slack_suite(monkeypatch, tmp_path) -> None:
 
 
 # NEW TESTS: CLI boundary tests for notification paths (Issue #124)
+
+
+def test_cli_rejects_removed_replay_flag() -> None:
+    result = CliRunner().invoke(app, ["--shadow"])
+
+    assert result.exit_code == 2
+    assert "No such option" in result.stderr
+    help_result = CliRunner().invoke(app, ["--help"])
+    assert "--shadow" not in _strip_ansi(help_result.stdout)

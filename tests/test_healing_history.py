@@ -163,6 +163,7 @@ def test_matching_requires_the_same_test_path(
     assert score == 0.0
 
 
+@pytest.mark.skipif(history_module.fcntl is None, reason="fcntl process locks are POSIX-only")
 def test_append_holds_an_exclusive_process_lock(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

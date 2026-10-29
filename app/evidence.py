@@ -20,7 +20,7 @@ from app.schemas import (
     SelectorHintEvidence,
     SnapshotReference,
 )
-from app.shadow.redaction import redact_value
+from app.redaction import redact_value
 from app.state import (
     AgentState,
     EvidenceCandidateRecord,
@@ -33,7 +33,6 @@ from app.verify.ast_lock import AstLockVerdict
 EvidenceStage = Literal[
     "memory_lookup",
     "patch_generator",
-    "shadow_verifier",
     "selector_verifier",
     "test_runner",
     "refusal_finalizer",

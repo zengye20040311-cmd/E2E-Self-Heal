@@ -80,6 +80,15 @@ def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def test_each_scenario_breaks_its_own_copy_and_never_the_project(
     project: Path, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
+    probe = project / "symlink-probe"
+    try:
+        probe.symlink_to(project / "shared", target_is_directory=True)
+    except OSError as exc:
+        if getattr(exc, "winerror", None) == 1314:
+            pytest.skip("Windows requires Developer Mode or privilege to create symlinks")
+        raise
+    else:
+        probe.unlink()
     log_dir = tmp_path_factory.mktemp("logs")
     seen: list[str] = []
 

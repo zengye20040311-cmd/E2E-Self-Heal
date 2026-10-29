@@ -62,7 +62,7 @@ values are redacted.
 
 When the structural AST lock refuses a candidate, that entry in `evidence.candidates` carries an
 `ast_lock` object. Otherwise the field is `null`: candidates refused by other checks (a stale
-line, a per-line scope gate, selector or shadow verification) explain themselves only in
+line, a per-line scope gate, selector verification) explain themselves only in
 `rejection`.
 
 | Field | Type | Meaning |

@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 from app.config import settings
 from app.llm import resolved_endpoint
 from app.schemas import ProviderProvenance
-from app.shadow.redaction import redact_url
+from app.redaction import redact_url
 from app.state import AgentState
 
 # A hostless endpoint cannot leave the machine, and the loopback names never resolve to a

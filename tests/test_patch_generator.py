@@ -561,7 +561,7 @@ def test_patch_generator_returns_rejection_feedback(
     assert route_after_patch(state) == "patch_generator"
 
 
-def test_patch_generator_reports_success_and_routes_to_shadow(
+def test_patch_generator_reports_success_and_routes_to_selector_verifier(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     output = PatchOutput(
@@ -577,7 +577,7 @@ def test_patch_generator_reports_success_and_routes_to_shadow(
 
     state["boundary_report"] = result["boundary_report"]
     state["patch_application_report"] = result["patch_application_report"]
-    assert route_after_patch(state) == "shadow_verifier"
+    assert route_after_patch(state) == "selector_verifier"
 
 
 def test_generation_failure_clears_previous_rejection(
@@ -596,7 +596,7 @@ def test_generation_failure_clears_previous_rejection(
     assert result["patch_application_report"] == {"ok": True}
 
     state["patch_application_report"] = result["patch_application_report"]
-    assert route_after_patch(state) == "shadow_verifier"
+    assert route_after_patch(state) == "selector_verifier"
 
 
 # --- AST lock integration (#286) ----------------------------------------

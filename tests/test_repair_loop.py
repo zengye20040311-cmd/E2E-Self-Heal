@@ -461,7 +461,6 @@ def test_a_rejected_candidate_and_its_replan_are_one_ordered_trace(
     attempt = [
         "diagnoser",
         "patch_generator",
-        "shadow_verifier",
         "selector_verifier",
         "test_runner",
     ]

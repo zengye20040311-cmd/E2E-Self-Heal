@@ -6,7 +6,7 @@ from typing import Any, MutableMapping, TextIO, cast
 
 import structlog
 
-from app.shadow.redaction import redact_value
+from app.redaction import redact_value
 
 
 class _CurrentStderr:

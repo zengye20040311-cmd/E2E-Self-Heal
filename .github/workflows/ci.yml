@@ -70,9 +70,6 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --locked --extra dev
 
-      - name: Verify cross-process Shadow replay
-        run: uv run pytest tests/test_shadow_runtime_integration.py -v
-
       - name: Verify demo is green on a clean checkout
         working-directory: examples
         run: pnpm exec playwright test scenarios/id-rename

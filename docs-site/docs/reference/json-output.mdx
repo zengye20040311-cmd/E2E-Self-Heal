@@ -17,6 +17,8 @@ import review from "@site/src/data/json-contract/review.json";
 
 # JSON output reference
 
+> Network snapshot replay was removed from local main. Captured examples below include historical replay stages; these remain readable for schema 2.x compatibility, but new runs never execute them.
+
 `e2e-healer heal --json` and `e2e-healer review --json` write one machine-readable document to
 stdout. This page documents every field of that contract at schema version `2.2`, says when a
 document is emitted at all, and shows payloads **captured from real runs** rather than written by
@@ -195,7 +197,7 @@ and no credential, so it is safe to log or to archive with the result.
 
 | Field | Type | Present | Meaning and what to do with it |
 | --- | --- | --- | --- |
-| `node` | string | always | The graph node that ran: `memory_lookup`, `diagnoser`, `patch_generator`, `decline_adjudicator`, `shadow_verifier`, `selector_verifier`, `test_runner` or `refusal_finalizer` today. An **open** set, because nodes can be added to the graph: ignore values you do not recognize. |
+| `node` | string | always | The graph node that ran: `memory_lookup`, `diagnoser`, `patch_generator`, `decline_adjudicator`, `selector_verifier`, `test_runner` or `refusal_finalizer` today. An **open** set, because nodes can be added to the graph: ignore values you do not recognize. |
 | `loop_count` | integer | always | The loop count after the node ran. A step that spends a loop shows the new count. |
 
 ### `EvidenceDomDiff`
@@ -242,7 +244,7 @@ One proposed repair and how each check judged it.
 | `source` | string | always | `"llm"` for a model-generated patch, `"memory"` for one reused from local healing history. |
 | `instructions` | array of `PatchInstruction` | always | The proposed edits. **Can be empty**: the model may propose no change. The candidate is still recorded, and the run then asks the model whether any locator or wait fix could preserve the test's intent, so an empty list can end the run as `likely_product_regression` without a test run. |
 | `memory_score` | number or null | always | Similarity to the healing-history record, between `0` and `1`, for `memory` candidates; `null` for `llm` candidates. |
-| `shadow_score` | number or null | always | Score from shadow-replay verification, or `null` when it did not run. |
+| `shadow_score` | number or null | always | Legacy replay field retained for old reports. Current runs always leave it `null`; network replay has been removed. |
 | `selector_counts` | object | always | For each verified selector, how many elements it matched on the live page. Empty when live verification did not run, which is the case unless an app URL is configured (`--app-url`). |
 | `test_passed` | boolean or null | always | The test result with this candidate applied, or `null` when the candidate was rejected before the test ran. |
 | `outcome` | string | always | `"accepted"`, `"rejected"`, or `"generated"` when no check recorded a verdict. |
@@ -265,7 +267,7 @@ One stage of one repair cycle.
 | Field | Type | Present | Meaning and what to do with it |
 | --- | --- | --- | --- |
 | `loop_count` | integer | always | The cycle the stage ran in. |
-| `stage` | string | always | `memory_lookup`, `patch_generator`, `shadow_verifier`, `selector_verifier`, `test_runner` or `refusal_finalizer`. |
+| `stage` | string | always | `memory_lookup`, `patch_generator`, `selector_verifier`, `test_runner` or `refusal_finalizer`. |
 | `outcome` | string | always | What happened at that stage; see the table below. Not a closed set. |
 | `details` | `LoopEvidenceDetails` | always | Extra values for the stage; every key is present and most are `null`. |
 
@@ -273,7 +275,7 @@ One stage of one repair cycle.
 
 | Field | Type | Present | Meaning and what to do with it |
 | --- | --- | --- | --- |
-| `score` | number or null | always | The memory similarity score (`memory_lookup`) or the shadow-replay score (`shadow_verifier`). |
+| `score` | number or null | always | The memory similarity score (`memory_lookup`); old reports can contain historical replay scores. |
 | `error` | string or null | always | A sanitized error message, for example why a patch was not applied. |
 | `instruction_count` | integer or null | always | Number of edits in a generated candidate (`patch_generator`, `candidate_generated`). `0` means the model proposed no change. |
 | `reason` | string or null | always | The refusal reason (`refusal_finalizer`), the same value as the report's `reason`. |
@@ -284,7 +286,6 @@ One stage of one repair cycle.
 | --- | --- |
 | `memory_lookup` | `disabled` (`--no-memory`), `miss`, `hit`, `candidate_rejected` |
 | `patch_generator` | `candidate_generated`, `application_rejected` (a guardrail or stale-line check refused the edit), `provider_failed`, `boundary_denied` |
-| `shadow_verifier` | `skipped`, `passed`, `failed`, `error` |
 | `selector_verifier` | `skipped` (no app URL, or no selector to check), `unavailable`, `passed`, `failed` |
 | `test_runner` | `passed`, `failed`, `final_suite_failed` (suite mode only) |
 | `refusal_finalizer` | `refused` |
@@ -319,7 +320,7 @@ change. It is derived from fields already in the result, so it never disagrees w
 | `termination` | When |
 | --- | --- |
 | `verified` | A `RepairSummary` with `is_success: true`: the repaired test passed. |
-| `verification_failed` | The last candidate was rejected by a verifier: shadow replay (`shadow_failed`, `shadow_error`), the live selector check (`selector_not_unique`), the test run (`test_failed`) or the final suite rerun (`final_suite_failed`). For a `RefusalReport` this applies only when `reason` is `loop_cap_reached`; a `RepairSummary` with `is_success: false` is always this. |
+| `verification_failed` | The last candidate was rejected by a verifier: the live selector check (`selector_not_unique`), the test run (`test_failed`) or the final suite rerun (`final_suite_failed`). For a `RefusalReport` this applies only when `reason` is `loop_cap_reached`; a `RepairSummary` with `is_success: false` is always this. |
 | `budget_exhausted` | `reason` is `loop_cap_reached` and no verifier rejected the last candidate: the patch checks refused to apply it (for example a stale line). Attempts ran out before verification could judge one. |
 | `refused` | Any other refusal `reason`. The run stopped on what the evidence showed (ambiguity, a boundary, a guardrail, a provider failure, a missing diff, a product regression), not on the budget. |
 
