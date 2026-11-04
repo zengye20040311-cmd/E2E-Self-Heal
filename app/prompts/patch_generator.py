@@ -53,6 +53,9 @@ SYSTEM_PROMPT = (
 
 SELECTOR_PROMPT_STRATEGIES: Mapping[FrameworkName, SelectorPromptStrategy] = {
     "react": SelectorPromptStrategy(
+        # framework="react"、"vue" 等，指的是被测 Web 应用使用的前端框架。
+        # 项目会据此给 LLM 补充不同的选择器修复建议；
+        # E2E 测试本身仍然使用 Playwright
         framework="react",
         guidance=(
             "Detected framework: React. Prefer Playwright locators that reflect React UI intent: "
